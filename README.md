@@ -3,6 +3,11 @@
 A browser HD-2D tech demo in the visual language of *Octopath Traveler*: pixel-art sprites in a
 lit 3D diorama with shadows, warm lanterns, fog, bloom and tilt-shift depth of field.
 
+![S1](./assests/screenshot_1.jpg)
+![S4](./assests/screenshot_4.jpg)
+![S3](./assests/screenshot_3.jpg)
+![S2](./assests/screenshot_2.jpg)
+
 **Stack:** Three.js 0.186 · React Three Fiber 9 · @react-three/postprocessing 3 · TypeScript ·
 Vite 8 · WebGL 2. No backend and no external art: every sprite and texture is generated
 procedurally at startup (≈200 ms), and all sound is synthesized with the Web Audio API.
