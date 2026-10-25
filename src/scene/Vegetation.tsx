@@ -66,7 +66,7 @@ export function Foliage({ density }: { density: number }) {
     // Garden rows: cabbages and sprouts on the soil plot.
     for (let gz = 0; gz < 3; gz++)
       for (let gx = 0; gx < 3; gx++)
-        out.push({
+        if (terrainAtWorld(14.5 + gx, 14.55 + gz) === 'soil') out.push({
           sprite: gz === 1 ? 'sprout' : 'cabbage',
           x: 14.5 + gx,
           z: 14.55 + gz,

@@ -21,11 +21,13 @@ import { FrameEnd, PerformanceController } from './Performance'
 import { Preloader } from './Preloader'
 import { GameClock } from './GameClock'
 import { DevTools } from './DevTools'
+import { RiversideMill } from './RiversideMill'
 import { AudioDirector } from './AudioDirector'
 
 export function GameCanvas() {
   const quality = useQuality()
   const adaptive = useSettings((s) => s.adaptive)
+  const sceneId = useGame((s) => s.sceneId)
   const ready = useGame((s) => s.ready)
 
   return (
@@ -41,13 +43,13 @@ export function GameCanvas() {
       }}
     >
       <GameClock />
-      <Suspense fallback={null}>
+      <Suspense key={sceneId} fallback={null}>
         <Lighting quality={quality} />
         <CameraRig />
         <Ground anisotropy={quality.anisotropy} />
         <Water />
         <Buildings />
-        <Well />
+        {sceneId === 'elmbrook' ? <Well /> : <RiversideMill />}
         <Fence />
         <Bridge />
         <Crates />

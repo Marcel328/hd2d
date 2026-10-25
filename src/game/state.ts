@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { Dir } from './world/layout'
+import type { SceneId } from './world/scenes'
 import { PLAYER_SPAWN } from './world/layout'
 
 /** Per-frame mutable state that must not trigger React renders. */
@@ -40,6 +41,10 @@ export interface Prompt {
 }
 
 interface GameState {
+  sceneId: SceneId
+  destination: SceneId | null
+  travel: (id: SceneId) => void
+  enterScene: (id: SceneId) => void
   night: boolean
   toggleNight: () => void
   dialogue: DialogueState | null
@@ -60,6 +65,13 @@ interface GameState {
 }
 
 export const useGame = create<GameState>((set, get) => ({
+  sceneId: 'elmbrook',
+  destination: null,
+  travel: (destination) => {
+    if (get().destination || !get().ready || destination === get().sceneId) return
+    set({ destination, dialogue: null, prompt: null, menuOpen: false })
+  },
+  enterScene: (sceneId) => set({ sceneId, destination: null, ready: false }),
   night: false,
   toggleNight: () => set((s) => ({ night: !s.night })),
   dialogue: null,

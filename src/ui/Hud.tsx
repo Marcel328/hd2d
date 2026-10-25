@@ -4,6 +4,7 @@ import { PRESETS, useSettings, useQuality, type QualityLevel, type Toggle } from
 import { useDev } from '../game/dev'
 import { DevPanel } from './DevPanel'
 import { TouchControls } from './TouchControls'
+import { SCENES } from '../game/world/scenes'
 import { sound, VOICES } from '../game/audio'
 
 const CHARS_PER_SECOND = 48
@@ -84,6 +85,7 @@ export function LoadingScreen() {
 }
 
 export function LocationBanner() {
+  const sceneId = useGame((s) => s.sceneId)
   const ready = useGame((s) => s.ready)
   const [show, setShow] = useState(true)
   useEffect(() => {
@@ -95,8 +97,8 @@ export function LocationBanner() {
   return (
     <div className="banner" aria-hidden>
       <div className="banner-rule" />
-      <h1>Elmbrook</h1>
-      <p>A village at the edge of the Whisperwood</p>
+      <h1>{SCENES[sceneId].name}</h1>
+      <p>{SCENES[sceneId].subtitle}</p>
       <div className="banner-rule" />
     </div>
   )
@@ -289,14 +291,27 @@ export function SettingsPanel() {
   )
 }
 
+function SceneTransition() {
+  const destination = useGame((s) => s.destination)
+  const ready = useGame((s) => s.ready)
+  const sceneId = useGame((s) => s.sceneId)
+  return (
+    <div className={`scene-transition${destination || !ready ? ' active' : ''}`} aria-live="polite" aria-busy={!!destination || !ready}>
+      <p>{SCENES[destination ?? sceneId].name}</p>
+    </div>
+  )
+}
+
 export function Hud() {
   const touch = useSettings((s) => s.touchControls)
+  const sceneId = useGame((s) => s.sceneId)
   return (
     <div className={touch ? 'hud touch-on' : 'hud'}>
       <LoadingScreen />
       <TopBar />
       <FpsCounter />
-      <LocationBanner />
+      <LocationBanner key={sceneId} />
+      <SceneTransition />
       <InteractionPrompt />
       <DialogueBox />
       <ControlsHint />

@@ -61,7 +61,7 @@ for (const [i, row] of ROWS.entries()) {
   if (row.length !== MAP_W) throw new Error(`map row ${i} has length ${row.length}, expected ${MAP_W}`)
 }
 
-const terrain: Terrain[] = ROWS.join('').split('').map((c) => {
+let terrain: Terrain[] = ROWS.join('').split('').map((c) => {
   const t = LEGEND[c]
   if (!t) throw new Error(`unknown map glyph "${c}"`)
   return t
@@ -85,3 +85,14 @@ export function isBlockingTerrain(t: Terrain): boolean {
 export function forEachTile(fn: (tx: number, tz: number, t: Terrain) => void) {
   for (let tz = 0; tz < MAP_H; tz++) for (let tx = 0; tx < MAP_W; tx++) fn(tx, tz, terrain[tz * MAP_W + tx])
 }
+
+/** Switch the tile data while keeping the shared 24 × 24 world dimensions. */
+export function setMap(rows: readonly string[]) {
+  if (rows.length !== MAP_H || rows.some((row) => row.length !== MAP_W)) throw new Error('Invalid scene map dimensions')
+  terrain = rows.join('').split('').map((c) => {
+    if (!LEGEND[c]) throw new Error(`Unknown terrain: ${c}`)
+    return LEGEND[c]
+  })
+}
+
+export const VILLAGE_MAP = ROWS

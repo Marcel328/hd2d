@@ -2,15 +2,26 @@ import { useEffect } from 'react'
 import { GameCanvas } from './scene/GameCanvas'
 import { Hud } from './ui/Hud'
 import { attachInput } from './game/input'
-import { buildCollision } from './game/world/collision'
-import { buildTrees } from './game/world/layout'
-import { terrainAt } from './game/world/map'
+import { activateScene, arrivalFor } from './game/world/scenes'
+import { runtime, useGame } from './game/state'
 import { sound } from './game/audio'
 
-// Static collision is built once, before the first frame.
-buildCollision(buildTrees().filter((t) => terrainAt(Math.floor(t.x), Math.floor(t.z)) !== 'forest'))
+activateScene('elmbrook')
 
 export default function App() {
+  const destination = useGame((s) => s.destination)
+  useEffect(() => {
+    if (!destination) return
+    const timer = setTimeout(() => {
+      activateScene(destination)
+      Object.assign(runtime.player, arrivalFor(destination), { moving: false })
+      runtime.focusId = null
+      runtime.dt = 0
+      runtime.stepFrames = 0
+      useGame.getState().enterScene(destination)
+    }, 320)
+    return () => clearTimeout(timer)
+  }, [destination])
   useEffect(attachInput, [])
   // Browsers only allow audio after a user gesture.
   useEffect(() => {

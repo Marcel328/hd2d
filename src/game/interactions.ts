@@ -66,25 +66,22 @@ const DIALOGUE: Record<string, Interactable['lines']> = {
       : ['The water far below glimmers in the sun. A wooden bucket hangs from a fraying rope.'],
 }
 
-registerInteractable({
-  id: 'signpost',
-  kind: 'read',
-  name: 'Signpost',
-  pos: { x: SIGNPOST.x, z: SIGNPOST.z },
-  reach: 1.25,
-  iconHeight: 2.35,
-  lines: DIALOGUE.signpost,
-})
-
-registerInteractable({
-  id: 'well',
-  kind: 'read',
-  name: 'Old Well',
-  pos: { x: WELL.x, z: WELL.z },
-  reach: 1.45,
-  iconHeight: 2.6,
-  lines: DIALOGUE.well,
-})
+export function buildInteractables(mill: boolean) {
+  interactables.clear()
+  registerInteractable({
+    id: 'signpost', kind: 'read', name: 'Signpost', pos: { ...SIGNPOST }, reach: 1.25, iconHeight: 2.35,
+    lines: mill ? () => ['← West — Elmbrook\nRiverside Mill — grain, flour and a little river magic.'] : DIALOGUE.signpost,
+  })
+  if (!mill) registerInteractable({
+    id: 'well', kind: 'read', name: 'Old Well', pos: { ...WELL }, reach: 1.45, iconHeight: 2.6, lines: DIALOGUE.well,
+  })
+  if (mill) registerInteractable({
+    id: 'mill', kind: 'read', name: 'Riverside Mill', pos: { x: 15.5, z: 14.3 }, reach: 1.6, iconHeight: 2.3,
+    lines: ({ night }) => night
+      ? ['The mill is closed for the night. The waterwheel keeps turning in the moonlight.']
+      : ['Fresh flour — milled by the river since 1842.', 'A note on the door: “Delivering flour to Elmbrook. Back soon. — Mira’s father”'],
+  })
+}
 
 export function npcLines(id: string): Interactable['lines'] {
   return DIALOGUE[id]

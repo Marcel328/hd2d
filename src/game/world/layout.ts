@@ -23,7 +23,7 @@ export interface HouseDef {
   lanternSide: -1 | 1
 }
 
-export const HOUSES: HouseDef[] = [
+export let HOUSES: HouseDef[] = [
   {
     id: 'inn',
     x0: 3,
@@ -76,7 +76,7 @@ export interface LightSource {
   power: number
 }
 
-export const LAMP_POSTS: { x: number; z: number }[] = [
+export let LAMP_POSTS: { x: number; z: number }[] = [
   { x: 8.5, z: 6.5 },
   { x: 15.6, z: 9.4 },
   { x: 10.4, z: 14.6 },
@@ -86,20 +86,20 @@ export const LAMP_POSTS: { x: number; z: number }[] = [
 
 export const LAMP_HEIGHT = 2.05
 
-export const DOOR_LANTERNS = HOUSES.map((h) => ({
+export let DOOR_LANTERNS = HOUSES.map((h) => ({
   x: h.doorX + h.lanternSide * 0.82,
   y: 1.75,
   z: h.z1 + 0.14,
 }))
 
-export const LIGHT_SOURCES: LightSource[] = [
+export let LIGHT_SOURCES: LightSource[] = [
   ...LAMP_POSTS.map((l) => ({ x: l.x, y: LAMP_HEIGHT, z: l.z, power: 1 })),
   ...DOOR_LANTERNS.map((l) => ({ ...l, power: 0.7 })),
 ]
 
-export const WELL = { x: 12, z: 11.5, radius: 0.72 }
+export let WELL = { x: 12, z: 11.5, radius: 0.72 }
 
-export const SIGNPOST = { x: 13.8, z: 20.3 }
+export let SIGNPOST = { x: 13.8, z: 20.3 }
 
 export type TreeKind = 'oak' | 'oak2' | 'pine' | 'birch' | 'bush'
 
@@ -111,7 +111,7 @@ export interface TreeDef {
   tint: number
 }
 
-const VILLAGE_TREES: TreeDef[] = [
+let VILLAGE_TREES: TreeDef[] = [
   { x: 10.6, z: 3.9, kind: 'oak', scale: 1.1, tint: 1 },
   { x: 2.7, z: 10.6, kind: 'birch', scale: 1, tint: 1 },
   { x: 20.8, z: 13.6, kind: 'oak2', scale: 1.05, tint: 0.95 },
@@ -157,7 +157,7 @@ export function buildTrees(): TreeDef[] {
   return trees
 }
 
-export const BUSHES: { x: number; z: number; scale: number }[] = [
+export let BUSHES: { x: number; z: number; scale: number }[] = [
   { x: 2.6, z: 6.4, scale: 1 },
   { x: 8.55, z: 2.9, scale: 0.9 },
   { x: 12.45, z: 4.9, scale: 1 },
@@ -172,7 +172,7 @@ export const BUSHES: { x: number; z: number; scale: number }[] = [
 
 export type PropKind = 'crate' | 'barrel'
 
-export const PROPS: { kind: PropKind; x: number; z: number; rot: number }[] = [
+export let PROPS: { kind: PropKind; x: number; z: number; rot: number }[] = [
   { kind: 'crate', x: 8.45, z: 5.45, rot: 0.1 },
   { kind: 'barrel', x: 8.5, z: 4.55, rot: 0 },
   { kind: 'barrel', x: 8.45, z: 13.6, rot: 0 },
@@ -183,7 +183,7 @@ export const PROPS: { kind: PropKind; x: number; z: number; rot: number }[] = [
 ]
 
 /** Garden fence: closed polyline segments (a gap on the west side serves as the gate). */
-export const FENCE_SEGMENTS: [number, number, number, number][] = [
+export let FENCE_SEGMENTS: [number, number, number, number][] = [
   [13.7, 13.7, 17.3, 13.7],
   [17.3, 13.7, 17.3, 17.3],
   [17.3, 17.3, 13.7, 17.3],
@@ -191,7 +191,7 @@ export const FENCE_SEGMENTS: [number, number, number, number][] = [
   [13.7, 14.9, 13.7, 13.7],
 ]
 
-export const BRIDGE = { x0: 19, x1: 21, z0: 7, z1: 9 }
+export let BRIDGE = { x0: 19, x1: 21, z0: 7, z1: 9 }
 
 export interface NpcDef {
   id: 'rowan' | 'mira'
@@ -202,7 +202,7 @@ export interface NpcDef {
   route?: [number, number][]
 }
 
-export const NPCS: NpcDef[] = [
+export let NPCS: NpcDef[] = [
   { id: 'rowan', name: 'Elder Rowan', x: 10.35, z: 11.6, facing: 'down' },
   {
     id: 'mira',
@@ -220,3 +220,26 @@ export const NPCS: NpcDef[] = [
 ]
 
 export const PLAYER_SPAWN = { x: 12, z: 19.4, facing: 'up' as Dir }
+
+export const VILLAGE_LAYOUT = {
+  houses: HOUSES, lamps: LAMP_POSTS, well: WELL, signpost: SIGNPOST,
+  bushes: BUSHES, props: PROPS, fences: FENCE_SEGMENTS, bridge: BRIDGE, npcs: NPCS, trees: VILLAGE_TREES,
+}
+
+export function setLayout(layout: typeof VILLAGE_LAYOUT) {
+  HOUSES = layout.houses
+  LAMP_POSTS = layout.lamps
+  WELL = layout.well
+  SIGNPOST = layout.signpost
+  BUSHES = layout.bushes
+  PROPS = layout.props
+  FENCE_SEGMENTS = layout.fences
+  BRIDGE = layout.bridge
+  NPCS = layout.npcs
+  VILLAGE_TREES = layout.trees
+  DOOR_LANTERNS = HOUSES.map((h) => ({ x: h.doorX + h.lanternSide * 0.82, y: 1.75, z: h.z1 + 0.14 }))
+  LIGHT_SOURCES = [
+    ...LAMP_POSTS.map((l) => ({ x: l.x, y: LAMP_HEIGHT, z: l.z, power: 1 })),
+    ...DOOR_LANTERNS.map((l) => ({ ...l, power: 0.7 })),
+  ]
+}
