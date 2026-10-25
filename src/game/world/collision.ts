@@ -33,10 +33,10 @@ function addSegment(x0: number, z0: number, x1: number, z1: number, t: number) {
   addBox({ x0: Math.min(x0, x1) - t, z0: Math.min(z0, z1) - t, x1: Math.max(x0, x1) + t, z1: Math.max(z0, z1) + t })
 }
 
-let built = false
 export function buildCollision(villageTrees: TreeDef[]) {
-  if (built) return
-  built = true
+  boxes.length = 0
+  for (const cell of grid) cell.length = 0
+  bodies.clear()
   // Terrain: merge horizontal runs of blocking tiles into single boxes.
   for (let tz = 0; tz < MAP_H; tz++) {
     let start = -1

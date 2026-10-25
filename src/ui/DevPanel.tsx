@@ -45,6 +45,10 @@ function Check({ k, label, hint }: { k: ToggleKey; label: string; hint?: string 
 
 export function DevPanel() {
   const dev = useDev()
+  const sceneId = useGame((s) => s.sceneId)
+  const teleports: [string, number, number][] = sceneId === 'elmbrook'
+    ? [...TELEPORTS, ['East exit', 22.7, 8]]
+    : [['West exit', 2.8, 8], ['Mill', 15.5, 14.4], ['Storehouse', 6, 6.7], ['Bridge', 20, 8]]
   const [, tick] = useState(0)
   useEffect(() => {
     if (!dev.open) return
@@ -123,7 +127,7 @@ export function DevPanel() {
       <section>
         <h3>Teleport</h3>
         <div className="dev-grid">
-          {TELEPORTS.map(([name, x, z]) => (
+          {teleports.map(([name, x, z]) => (
             <button key={name} className="dev-btn" onClick={() => teleport(x, z)}>
               {name}
             </button>

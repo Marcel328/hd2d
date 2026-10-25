@@ -10,7 +10,7 @@ import { moveBody, registerBody, unregisterBody, type Body } from '../game/world
 import { findFocus, interactables, npcLines, registerInteractable, unregisterInteractable, type Interactable } from '../game/interactions'
 import { runtime, useGame } from '../game/state'
 import type { Dir, NpcDef } from '../game/world/layout'
-import { PLAYER_SPAWN } from '../game/world/layout'
+import { exitAt } from '../game/world/scenes'
 import { groundHeight } from './Props'
 import { sound } from '../game/audio'
 import { BRIDGE } from '../game/world/layout'
@@ -94,7 +94,7 @@ function SpriteCharacter({ look, state }: { look: keyof typeof LOOKS; state: Cha
 
 export function Player() {
   const state = useMemo<CharacterState>(
-    () => ({ x: PLAYER_SPAWN.x, z: PLAYER_SPAWN.z, facing: PLAYER_SPAWN.facing, moving: false, running: false, anim: 0 }),
+    () => ({ x: runtime.player.x, z: runtime.player.z, facing: runtime.player.facing, moving: false, running: false, anim: 0 }),
     [],
   )
   const body = useMemo<Body>(() => ({ id: 'player', x: state.x, z: state.z, r: 0.27 }), [state])
@@ -111,6 +111,11 @@ export function Player() {
     if (dt === 0) return // frozen
     const game = useGame.getState()
 
+    if (game.destination || !game.ready) {
+      state.moving = false
+      runtime.player.moving = false
+      return
+    }
     if (game.dialogue) {
       state.moving = false
       if (consumePress('interact')) game.pressDialogue()
@@ -158,6 +163,11 @@ export function Player() {
     rp.facing = state.facing
     rp.moving = state.moving
 
+    const destination = exitAt(game.sceneId, body.x, body.z, ix)
+    if (destination) {
+      game.travel(destination)
+      return
+    }
     const [fx, fz] = DIR_VEC[state.facing]
     const focus = game.menuOpen ? null : findFocus(body.x, body.z, fx, fz)
     runtime.focusId = focus?.id ?? null

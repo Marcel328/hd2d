@@ -16,7 +16,8 @@ function loadMuted(): boolean {
 }
 
 /** Distance (in tiles) from each tile to the nearest water, for the creek's loudness. */
-const waterDistance = (() => {
+let waterDistance: Float32Array
+export function rebuildWaterDistance() {
   const water: [number, number][] = []
   forEachTile((tx, tz, t) => {
     if (t === 'water' || t === 'bridge') water.push([tx, tz])
@@ -28,8 +29,9 @@ const waterDistance = (() => {
       for (const [wx, wz] of water) best = Math.min(best, Math.hypot(wx - tx, wz - tz))
       d[tz * MAP_W + tx] = best
     }
-  return d
-})()
+  waterDistance = d
+}
+rebuildWaterDistance()
 
 class SoundEngine {
   muted = loadMuted()
