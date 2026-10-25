@@ -9,6 +9,8 @@ import { billboardGeometry, sharedUniforms } from '../gfx/materialPatches'
 import { getMothSprites, MOTH_H, MOTH_W } from '../gfx/mothSprite'
 import { BEACON, BEACON_HEIGHT } from '../game/world/layout'
 import { gutter, LANTERN_LOOK, lanternMode, useStory } from '../game/story'
+import { useOwnedResources } from './useOwnedResources'
+import { useBattle } from '../game/battle'
 
 /** Overshot waterwheel beside the mill's east wall; its axle runs east–west. */
 export function RiversideMill() {
@@ -73,7 +75,7 @@ export function LastLantern() {
   const flame = useRef<THREE.Mesh>(null!)
   const glow = useRef<THREE.Sprite>(null!)
   const s = useMemo(() => getSurfaces(), [])
-  const { iron, stone, glass, flameMat, glowMat, flameGeo } = useMemo(() => {
+  const { iron, stone, glass, flameMat, glowMat, flameGeo, flameTexture } = useMemo(() => {
     const ironB = new MeshBuilder(TEX_WORLD.timber)
     const stoneB = new MeshBuilder(TEX_WORLD.stone)
     const glassB = new MeshBuilder(1)
@@ -96,6 +98,7 @@ export function LastLantern() {
     const tex = getFlameTexture().clone()
     tex.needsUpdate = true
     return {
+      flameTexture: tex,
       iron: ironB.build(),
       stone: stoneB.build(),
       glass: glassB.build(),
@@ -117,6 +120,7 @@ export function LastLantern() {
   const ironMat = useMemo(() => new THREE.MeshStandardMaterial({ map: s.timber, color: '#5a5462', roughness: 0.6, metalness: 0.3 }), [s])
   const stoneMat = useMemo(() => new THREE.MeshStandardMaterial({ map: s.stone, roughness: 0.95 }), [s])
   const color = useMemo(() => new THREE.Color(), [])
+  useOwnedResources(iron, stone, glass, flameMat, glowMat, flameGeo, flameTexture, glassMat, ironMat, stoneMat)
 
   useFrame(() => {
     // Nothing to animate when this scene has no Last Lantern (or before the meshes mount).
@@ -155,12 +159,14 @@ export function LastLantern() {
 export function GloamMoth() {
   const mesh = useRef<THREE.Mesh>(null!)
   const ending = useStory((s) => s.ending)
-  const { material, geometry } = useMemo(() => {
+  const { material, geometry, map, emissiveMap } = useMemo(() => {
     const sprites = getMothSprites()
     const map = sprites.color.clone()
     const emissiveMap = sprites.glow.clone()
     map.needsUpdate = emissiveMap.needsUpdate = true
     return {
+      map,
+      emissiveMap,
       material: new THREE.MeshStandardMaterial({
         map,
         emissiveMap,
@@ -169,13 +175,15 @@ export function GloamMoth() {
         roughness: 1,
         shadowSide: THREE.DoubleSide,
       }),
-      geometry: billboardGeometry(MOTH_W / 16, MOTH_H / 16),
+      geometry: billboardGeometry(4.2, 4.2 * MOTH_H / MOTH_W),
     }
   }, [])
+  useOwnedResources(material, geometry, map, emissiveMap)
 
   useFrame(() => {
     const beacon = BEACON
     if (!beacon || !mesh.current) return
+    mesh.current.visible = !useBattle.getState().active
     const t = runtime.time
     const sleeping = ending === 'fireflies'
     // Slow, heavy wing-beats while feeding; a lazy flex now and then while asleep.
@@ -186,7 +194,10 @@ export function GloamMoth() {
     const scale = sleeping ? 0.55 : 1
     mesh.current.scale.set(scale, scale, 1)
     const bob = sleeping ? 0 : Math.sin(t * 2.1) * 0.12
-    mesh.current.position.set(beacon.x, sleeping ? BEACON_HEIGHT + 0.45 : BEACON_HEIGHT + 0.05 + bob, beacon.z + (sleeping ? 0.05 : 0.3))
+    // Billboard geometry is anchored at its bottom. Seat the thorax on the lantern crown,
+    // rather than lifting the whole enlarged sprite above it (which clips the antennae).
+    const spriteHeight = 4.2 * MOTH_H / MOTH_W
+    mesh.current.position.set(beacon.x, BEACON_HEIGHT + 0.35 - spriteHeight * scale * 0.55 + bob, beacon.z + (sleeping ? 0.05 : 0.3))
     mesh.current.rotation.y = sharedUniforms.uYaw.value
     material.emissive.set(sleeping ? '#c8f07a' : '#e8f7b0')
     material.emissiveIntensity = (sleeping ? 1.6 : 0.6) + runtime.tod * 0.8

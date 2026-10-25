@@ -9,6 +9,7 @@ import { useDev } from '../game/dev'
 import { sharedUniforms } from '../gfx/materialPatches'
 import { MAP_H, MAP_W } from '../game/world/map'
 import { groundHeight } from './Props'
+import { BATTLE_ENTER_MS, BATTLE_EXIT_MS, useBattle } from '../game/battle'
 
 const PITCH = THREE.MathUtils.degToRad(34)
 /** Interiors are framed closer and a little steeper, like a dollhouse with the front wall off. */
@@ -24,6 +25,16 @@ export function CameraRig() {
   const targetDist = useRef(19)
   const focus = useMemo(() => new THREE.Vector3(runtime.player.x, 0, runtime.player.z - 1), [])
   const tmp = useMemo(() => ({ v: new THREE.Vector3(), size: new THREE.Vector2() }), [])
+  const battleCamera = useRef({ session: -1, transition: '', since: 0 })
+  const reduceMotion = useRef(false)
+
+  useEffect(() => {
+    const preference = matchMedia('(prefers-reduced-motion: reduce)')
+    const sync = () => { reduceMotion.current = preference.matches }
+    sync()
+    preference.addEventListener('change', sync)
+    return () => preference.removeEventListener('change', sync)
+  }, [])
 
   useEffect(() => {
     camera.fov = 30
@@ -31,7 +42,7 @@ export function CameraRig() {
     camera.far = 140
     camera.updateProjectionMatrix()
     const onWheel = (e: WheelEvent) => {
-      if (useDev.getState().freeCam) return
+      if (useDev.getState().freeCam || useBattle.getState().active || useGame.getState().menuOpen || useGame.getState().inventoryOpen) return
       targetDist.current = THREE.MathUtils.clamp(targetDist.current + Math.sign(e.deltaY) * 1.2, MIN_DIST, MAX_DIST)
     }
     gl.domElement.addEventListener('wheel', onWheel, { passive: true })
@@ -42,7 +53,8 @@ export function CameraRig() {
   useFrame((_, rawDt) => {
     const dt = Math.min(rawDt, 0.1)
     const p = runtime.player
-    if (useDev.getState().freeCam) {
+    const battle = useBattle.getState()
+    if (useDev.getState().freeCam && !battle.active) {
       // The developer camera owns the view; no see-through hole from arbitrary angles.
       sharedUniforms.uOccStrength.value = 0
       return
@@ -57,7 +69,7 @@ export function CameraRig() {
     const pitch = indoor ? ROOM_PITCH : PITCH
     // Portrait screens would show only a sliver of the scene; back the camera off instead.
     const zoom = indoor ? (ROOM_DIST / 19) * dist.current : dist.current
-    const d = zoom * THREE.MathUtils.clamp(1.05 / camera.aspect, 1, 1.6)
+    let d = zoom * THREE.MathUtils.clamp(1.05 / camera.aspect, 1, 1.6)
     const halfW = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * d * camera.aspect
     let tx: number
     let tz: number
@@ -87,8 +99,28 @@ export function CameraRig() {
     focus.y = groundHeight(p.x, p.z) * 0.5 + 0.6
     dist.current += (targetDist.current - dist.current) * (1 - Math.exp(-dt * 6))
 
-    camera.position.set(focus.x, focus.y + Math.sin(pitch) * d, focus.z + Math.cos(pitch) * d)
+    // Orbit the actual diorama, rather than rotating a captured image. A short roll at the
+    // midpoint gives the encounter a cinematic turn; the return unwinds to the walking view.
+    const track = battleCamera.current
+    if (track.session !== battle.session || track.transition !== battle.transition) {
+      track.session = battle.session
+      track.transition = battle.transition
+      track.since = performance.now()
+    }
+    let blend = 0
+    let roll = 0
+    if (battle.active && !reduceMotion.current) {
+      const duration = battle.transition === 'leaving' ? BATTLE_EXIT_MS : BATTLE_ENTER_MS
+      const t = THREE.MathUtils.clamp((performance.now() - track.since) / duration, 0, 1)
+      const eased = t * t * (3 - 2 * t)
+      blend = battle.transition === 'entering' ? eased : battle.transition === 'leaving' ? 1 - eased : 1
+      roll = battle.transition === 'entering' ? Math.sin(t * Math.PI) * 0.025 : 0
+      d *= 1 - blend * 0.12
+    }
+    const yaw = blend * 0.3
+    camera.position.set(focus.x + Math.sin(yaw) * Math.cos(pitch) * d, focus.y + Math.sin(pitch) * d, focus.z + Math.cos(yaw) * Math.cos(pitch) * d)
     camera.lookAt(focus)
+    camera.rotateZ(roll)
     camera.updateMatrixWorld()
     runtime.focus.x = p.x
     runtime.focus.y = groundHeight(p.x, p.z) + 0.8

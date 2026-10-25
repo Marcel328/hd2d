@@ -11,6 +11,7 @@ import { runtime } from '../game/state'
 import { sampleTimeOfDay } from './timeOfDay'
 import { roofGeometry } from './Buildings'
 import { LANTERN_LOOK, lanternMode } from '../game/story'
+import { useOwnedResources } from './useOwnedResources'
 
 type Mode = 0 | 1 | 2 // dust, firefly, smoke
 
@@ -97,6 +98,7 @@ function useParticles(mode: Mode, positions: number[], color: string, size: numb
     })
     return new THREE.Points(g, m)
   }, [mode, positions, color, size])
+  useOwnedResources(obj, obj.geometry, obj.material)
   // Points are sized in world units: pixels per unit at depth 1.
   obj.material.uniforms.uScale.value = (size2.height * dpr) / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)))
   obj.frustumCulled = false
@@ -173,6 +175,7 @@ export function Atmosphere({ amount, shafts }: { amount: number; shafts: boolean
       return m
     })
   }, [])
+  useOwnedResources(...shaftMeshes.flatMap((mesh) => [mesh, mesh.geometry, mesh.material]))
 
   const basis = useMemo(
     () => ({ x: new THREE.Vector3(), y: new THREE.Vector3(), z: new THREE.Vector3(), m: new THREE.Matrix4(), view: new THREE.Vector3(0, 0.3, 1) }),

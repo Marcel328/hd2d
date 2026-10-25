@@ -10,6 +10,7 @@ import { EndingCard, IntroCard, newGame, ObjectiveTracker } from './Story'
 import { useStory } from '../game/story'
 import { SCENES } from '../game/world/scenes'
 import { sound, VOICES } from '../game/audio'
+import { useBattle } from '../game/battle'
 
 const CHARS_PER_SECOND = 48
 
@@ -68,10 +69,8 @@ export function DialogueBox() {
               <button
                 className={(i === dialogue.choice ? 'on' : '') + (c.disabled ? ' off' : '')}
                 disabled={c.disabled}
-                onPointerDown={(e) => {
-                  e.stopPropagation()
-                  pickChoice(i)
-                }}
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={() => pickChoice(i)}
               >
                 {c.label}
               </button>
@@ -370,8 +369,9 @@ function AreaFade() {
 export function Hud() {
   const touch = useSettings((s) => s.touchControls)
   const bannerSeq = useGame((s) => s.banner.seq)
+  const battle = useBattle((s) => s.active)
   return (
-    <div className={touch ? 'hud touch-on' : 'hud'}>
+    <div className={`hud${touch ? ' touch-on' : ''}${battle ? ' in-battle' : ''}`}>
       <LoadingScreen />
       <TopBar />
       <div className="hud-left">

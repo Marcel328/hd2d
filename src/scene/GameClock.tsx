@@ -15,28 +15,38 @@ const MAX_DT = 1 / 20
 export function GameClock() {
   useFrame((_, rawDt) => {
     const game = useGame.getState()
-    if (consumePress('dev')) useDev.getState().toggle('open')
-    // Battles and story cards own the keyboard while they're up.
     const story = useStory.getState()
-    if (useBattle.getState().active || story.stage === 'intro' || story.showEnding) {
-      consumePress('menu')
-      consumePress('inventory')
-      consumePress('toggleTime')
-    }
-    if (consumePress('menu')) {
-      if (game.inventoryOpen) game.setInventoryOpen(false)
-      else game.setMenuOpen(!game.menuOpen)
-    }
-    if (consumePress('inventory') && !game.dialogue && !game.areaTarget) game.setInventoryOpen(!game.inventoryOpen)
-    if (consumePress('toggleTime') && !game.dialogue) game.toggleNight()
-    if (consumePress('mute')) sound.setMuted(!sound.muted)
+    // Full-screen content, dialogue and transitions own input until they finish. Consume even
+    // blocked shortcuts so no key can spill into the next screen when it closes this frame.
+    const screenOwnsInput = useBattle.getState().active || story.stage === 'intro' || story.showEnding ||
+      !!game.dialogue || !!game.destination || !!game.areaTarget || !game.ready
+    const menu = consumePress('menu')
+    const inventory = consumePress('inventory')
+    const time = consumePress('toggleTime')
+    const developer = consumePress('dev')
+    const pause = consumePress('devPause')
+    const step = consumePress('devStep')
+    const freeCam = consumePress('devFreeCam')
 
-    const dev = useDev.getState()
-    if (dev.open) {
-      if (consumePress('devPause')) dev.toggle('paused')
-      if (consumePress('devStep')) dev.step()
-      if (consumePress('devFreeCam')) dev.toggle('freeCam')
+    if (!screenOwnsInput) {
+      if (menu) {
+        if (game.inventoryOpen) game.setInventoryOpen(false)
+        else game.setMenuOpen(!game.menuOpen)
+      }
+      if (inventory) game.setInventoryOpen(!useGame.getState().inventoryOpen)
+      if (time) game.toggleNight()
+      const current = useGame.getState()
+      if (!current.inventoryOpen && !current.menuOpen) {
+        if (developer) useDev.getState().toggle('open')
+        const dev = useDev.getState()
+        if (dev.open) {
+          if (pause) dev.toggle('paused')
+          if (step) dev.step()
+          if (freeCam) dev.toggle('freeCam')
+        }
+      }
     }
+    if (consumePress('mute')) sound.setMuted(!sound.muted)
 
     let dt = Math.min(rawDt, MAX_DT)
     if (useDev.getState().paused) {

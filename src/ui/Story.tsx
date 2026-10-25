@@ -33,7 +33,19 @@ function useConfirmKey(active: boolean, onConfirm: () => void, onCancel?: () => 
   useEffect(() => {
     if (!active) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.code === 'KeyE' || e.code === 'Enter' || e.code === 'Space') {
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      const confirm = e.code === 'KeyE' || e.code === 'Enter' || e.code === 'Space'
+      if ((confirm || e.code === 'Escape') && e.repeat) {
+        e.preventDefault()
+        consumePress(confirm ? 'interact' : 'menu')
+        return
+      }
+      const target = e.target instanceof Element ? e.target : null
+      if ((e.code === 'Enter' || e.code === 'Space') && target?.closest('button, input, select, textarea, a[href]')) {
+        consumePress('interact')
+        return // Preserve the selected button's native activation (including Play again).
+      }
+      if (confirm) {
         e.preventDefault()
         consumePress('interact')
         onConfirm()
@@ -114,6 +126,9 @@ export function EndingCard() {
   const battles = useStory((s) => s.battles)
   const looted = useInventory((s) => s.looted)
   const [confirmReplay, setConfirmReplay] = useState(false)
+  useEffect(() => {
+    if (!show) setConfirmReplay(false)
+  }, [show])
   const close = () => useStory.getState().dismissEnding()
   const replay = () => {
     useStory.getState().dismissEnding()

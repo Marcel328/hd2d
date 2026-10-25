@@ -25,6 +25,16 @@ function useGpuTimer() {
     if (!ext) return null
     return { ctx, ext, pending: [] as WebGLQuery[], active: null as WebGLQuery | null }
   }, [gl])
+  useEffect(() => () => {
+    if (!timer) return
+    if (timer.active) {
+      timer.ctx.endQuery(timer.ext.TIME_ELAPSED_EXT)
+      timer.ctx.deleteQuery(timer.active)
+      timer.active = null
+    }
+    timer.pending.forEach((query) => timer.ctx.deleteQuery(query))
+    timer.pending.length = 0
+  }, [timer])
 
   // Begin before anything renders (shadow maps included)…
   useFrame(() => {

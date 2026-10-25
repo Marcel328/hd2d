@@ -17,6 +17,7 @@ npm install
 npm run dev        # http://localhost:5173
 npm run build      # type-check + production bundle in dist/
 npm run preview    # serve the production bundle
+npm test           # combat lifecycle, rules, presentation events and retry regression checks
 ```
 
 ## Controls
@@ -77,6 +78,16 @@ One small Octopath-style encounter: Attack, Defend, Items, and a readable enemy.
 - **Items:** herbs, rations, bread and honey heal. Thrown flour blinds the moth so its next
   attack misses.
 - **Defeat** offers *Retry* (the bag is restored to how it was) or *Step back* to choose again.
+
+The encounter opens with a short orbit of the live 3D diorama and an iris of lantern light,
+then unfolds into a battle stage. Wing Buffet sends narrow wind arcs toward the traveller;
+Gloam Burst gathers a violet core before releasing broad shockwaves. Guard, counter-strikes,
+fire, healing, flour and shield breaks have their own effects. Victory and retreat return the
+camera to exploration before story dialogue resumes. Reduced-motion preferences replace the
+camera movement with fades.
+
+The boss uses two coordinated 96×80 pixel-art frames, shared by the world billboard and battle
+screen: pale silk wings, indigo edges, luminous lantern markings and trailing jade tails.
 
 Tuning, checked by simulating 500 fights: attacking every turn wins about 25% of the time;
 defending when the burst is telegraphed wins about 99%; defending plus herbs, 100%.

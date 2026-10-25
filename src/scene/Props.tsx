@@ -5,6 +5,7 @@ import { BRIDGE, FENCE_SEGMENTS, PROPS, WELL } from '../game/world/layout'
 import { MeshBuilder, AXES } from '../gfx/meshBuilder'
 import { getSurfaces, TEX_WORLD } from '../gfx/surfaceTextures'
 import { occlusionPatch, patchMaterial } from '../gfx/materialPatches'
+import { useOwnedResources } from './useOwnedResources'
 
 const std = (map: THREE.Texture, extra: THREE.MeshStandardMaterialParameters = {}) =>
   patchMaterial(new THREE.MeshStandardMaterial({ map, roughness: 0.9, metalness: 0, ...extra }), [occlusionPatch])
@@ -44,6 +45,7 @@ export function Well() {
   const surf = getSurfaces()
   const woodMat = useMemo(() => std(surf.darkPlanks), [surf])
   const stoneMat = useMemo(() => std(stoneTex), [stoneTex])
+  useOwnedResources(stoneTex, parts, woodMat, stoneMat)
 
   return (
     <group>
@@ -81,6 +83,7 @@ export function Fence() {
     return b.build()
   }, [])
   const mat = useMemo(() => std(getSurfaces().planks), [])
+  useOwnedResources(geometry, mat)
   return <mesh geometry={geometry} material={mat} castShadow receiveShadow />
 }
 
@@ -125,6 +128,7 @@ export function Bridge() {
   const s = getSurfaces()
   const deckMat = useMemo(() => std(s.planks), [s])
   const railMat = useMemo(() => std(s.timber), [s])
+  useOwnedResources(deck, rails, deckMat, railMat)
   return (
     <group>
       <mesh geometry={deck} material={deckMat} castShadow receiveShadow />
@@ -140,17 +144,19 @@ export function Crates() {
   const crateRef = useRef<THREE.InstancedMesh>(null!)
   const barrelRef = useRef<THREE.InstancedMesh>(null!)
   const s = getSurfaces()
-  const { crateMat, barrelMat, crateGeo, barrelGeo } = useMemo(() => {
+  const { crateMat, barrelMat, crateGeo, barrelGeo, barrelTex } = useMemo(() => {
     const barrelTex = s.barrel.clone()
     barrelTex.repeat.set(1, 1)
     barrelTex.needsUpdate = true
     return {
+      barrelTex,
       crateMat: std(s.crate),
       barrelMat: std(barrelTex),
       crateGeo: new THREE.BoxGeometry(0.66, 0.66, 0.66).translate(0, 0.33, 0),
       barrelGeo: new THREE.CylinderGeometry(0.29, 0.29, 0.78, 12).translate(0, 0.39, 0),
     }
   }, [s])
+  useOwnedResources(crateMat, barrelMat, crateGeo, barrelGeo, barrelTex)
 
   useLayoutEffect(() => {
     const m = new THREE.Matrix4()

@@ -17,6 +17,7 @@ import { enteringCottage, leavingCottage } from '../game/world/interiors'
 import { groundHeight } from './Props'
 import { sound } from '../game/audio'
 import { BRIDGE } from '../game/world/layout'
+import { useOwnedResources } from './useOwnedResources'
 
 export interface CharacterState {
   x: number
@@ -36,9 +37,10 @@ function dirTowards(dx: number, dz: number): Dir {
 
 /** A 16×24 sprite billboard (1 × 1.5 units) with walk/idle animation and a soft contact shadow. */
 function SpriteCharacter({ look, state }: { look: keyof typeof LOOKS; state: CharacterState }) {
+  const group = useRef<THREE.Group>(null!)
   const mesh = useRef<THREE.Mesh>(null!)
   const blob = useRef<THREE.Mesh>(null!)
-  const { geometry, material } = useMemo(() => {
+  const { geometry, material, texture } = useMemo(() => {
     const texture = buildCharacterSheet(LOOKS[look])
     const material = new THREE.MeshStandardMaterial({
       map: texture,
@@ -51,7 +53,7 @@ function SpriteCharacter({ look, state }: { look: keyof typeof LOOKS; state: Cha
       metalness: 0,
       shadowSide: THREE.DoubleSide,
     })
-    return { geometry: billboardGeometry(1, 1.5), material }
+    return { geometry: billboardGeometry(1, 1.5), material, texture }
   }, [look])
   const blobMat = useMemo(
     () =>
@@ -66,8 +68,13 @@ function SpriteCharacter({ look, state }: { look: keyof typeof LOOKS; state: Cha
     [],
   )
   const prevMoving = useRef(false)
+  useOwnedResources(geometry, material, texture, blobMat)
 
   useFrame(() => {
+    // The foreground battle owns the characters until its return transition finishes.
+    // Keep map sprites resident, but hide their meshes and shadows together.
+    group.current.visible = !useBattle.getState().active
+    if (!group.current.visible) return
     if (state.moving !== prevMoving.current) {
       // Start a walk on a stepping frame; restart idle on its base frame.
       state.anim = state.moving ? 0.07 : 0
@@ -86,7 +93,7 @@ function SpriteCharacter({ look, state }: { look: keyof typeof LOOKS; state: Cha
   })
 
   return (
-    <group>
+    <group ref={group} name={`world-character-${look}`}>
       <mesh ref={mesh} geometry={geometry} material={material} castShadow receiveShadow />
       <mesh ref={blob} rotation-x={-Math.PI / 2} material={blobMat} renderOrder={2}>
         <planeGeometry args={[0.85, 0.42]} />
@@ -313,6 +320,7 @@ export function InteractionMarker() {
     const material = new THREE.MeshBasicMaterial({ map: textures.talk, alphaTest: 0.5, depthTest: false })
     return { material, geometry: billboardGeometry(14 / 16, 12 / 16), textures }
   }, [])
+  useOwnedResources(material, geometry, ...Object.values(textures))
 
   useFrame(() => {
     const id = runtime.focusId

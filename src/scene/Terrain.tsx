@@ -5,9 +5,11 @@ import { buildGroundTexture, GROUND_PAD } from '../gfx/terrainTexture'
 import { waterTexture } from '../gfx/surfaceTextures'
 import { MAP_H, MAP_W, forEachTile } from '../game/world/map'
 import { runtime } from '../game/state'
+import { useOwnedResources } from './useOwnedResources'
 
 export function Ground({ anisotropy }: { anisotropy: number }) {
   const texture = useMemo(() => buildGroundTexture(), [])
+  useOwnedResources(texture)
   useMemo(() => {
     texture.anisotropy = anisotropy
     texture.needsUpdate = true
@@ -56,6 +58,7 @@ export function Water() {
     g.computeVertexNormals()
     return { geometry: g, texture: waterTexture() }
   }, [])
+  useOwnedResources(geometry, texture)
 
   useFrame(() => {
     // Flow south; step in whole texels for a pixel-art feel.

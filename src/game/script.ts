@@ -296,6 +296,8 @@ function offerOil() {
 }
 
 export function fightMoth() {
+  if (useBattle.getState().active) return
+  useGame.setState({ dialogue: null, inventoryOpen: false, menuOpen: false, prompt: null })
   useStory.getState().countBattle()
   useBattle.getState().start({
     onRetry: () => useStory.getState().countBattle(),

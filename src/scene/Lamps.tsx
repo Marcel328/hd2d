@@ -13,6 +13,7 @@ import { runtime, useGame } from '../game/state'
 import { COTTAGE_LIGHTS } from '../game/world/interiors'
 import { gutter, LANTERN_LOOK, lanternMode } from '../game/story'
 import { sampleTimeOfDay } from './timeOfDay'
+import { useOwnedResources } from './useOwnedResources'
 
 const LAMP_COLOR = new THREE.Color('#ffb25e')
 
@@ -82,6 +83,7 @@ export function Lamps() {
     })
     return { g, m }
   }, [])
+  useOwnedResources(geo.iron, geo.stone, geo.glass, ironMat, stoneMat, glassMat, glow.g, glow.m)
 
   const lampColor = useMemo(() => new THREE.Color(), [])
   useFrame(() => {

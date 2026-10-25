@@ -13,13 +13,15 @@ import { sharedUniforms } from '../gfx/materialPatches'
 import { lightPool } from './Lamps'
 import { sunLight } from './Lighting'
 import { groundHeight } from './Props'
+import { useOwnedResources } from './useOwnedResources'
 
 function FreeCamera() {
   const camera = useThree((s) => s.camera)
   const gl = useThree((s) => s.gl)
-  const controls = useMemo(() => new OrbitControls(camera, gl.domElement), [camera, gl])
+  const controls = useMemo(() => new OrbitControls(camera), [camera])
 
   useEffect(() => {
+    controls.connect(gl.domElement)
     controls.target.set(runtime.player.x, 0.8, runtime.player.z)
     controls.enableDamping = true
     controls.dampingFactor = 0.12
@@ -101,6 +103,7 @@ function Colliders() {
     l.frustumCulled = false
     return l
   }, [])
+  useOwnedResources(boxes, boxes.geometry, boxes.material, rings, rings.geometry, rings.material)
 
   useFrame(() => {
     const pos = rings.geometry.attributes.position as THREE.BufferAttribute
@@ -155,6 +158,7 @@ function LightOverlay() {
     sources.renderOrder = 22
     return { markers, sources }
   }, [])
+  useOwnedResources(sources, sources.geometry, sources.material, ...markers.flatMap((mesh) => [mesh, mesh.geometry, mesh.material]))
 
   useFrame(() => {
     markers.forEach((m, i) => {
@@ -179,7 +183,7 @@ function LightOverlay() {
 function ShadowFrustum() {
   const helper = useMemo(() => (sunLight.current ? new THREE.CameraHelper(sunLight.current.shadow.camera) : null), [])
   useFrame(() => helper?.update())
-  useEffect(() => () => helper?.dispose(), [helper])
+  useOwnedResources(helper)
   return helper ? <primitive object={helper} /> : null
 }
 

@@ -3,6 +3,8 @@ import type { Dir } from './world/layout'
 import type { SceneId } from './world/scenes'
 import type { AreaId } from './world/interiors'
 import { PLAYER_SPAWN } from './world/layout'
+import { useBattle } from './battle'
+import { useStory } from './story'
 
 /** Per-frame mutable state that must not trigger React renders. */
 export const runtime = {
@@ -111,12 +113,18 @@ interface GameState {
   setDprLabel: (s: string) => void
 }
 
+/** Pointer buttons and keyboard shortcuts share the same screen-ownership rules. */
+function menusBlocked(s: Pick<GameState, 'dialogue' | 'ready' | 'destination' | 'areaTarget'>): boolean {
+  const story = useStory.getState()
+  return !!s.dialogue || !s.ready || !!s.destination || !!s.areaTarget || useBattle.getState().active || story.stage === 'intro' || story.showEnding
+}
+
 export const useGame = create<GameState>((set, get) => ({
   sceneId: 'elmbrook',
   destination: null,
   travel: (destination) => {
     if (get().destination || !get().ready || destination === get().sceneId) return
-    set({ destination, dialogue: null, prompt: null, menuOpen: false })
+    set({ destination, dialogue: null, prompt: null, menuOpen: false, inventoryOpen: false })
   },
   enterScene: (sceneId) => set({ sceneId, destination: null, ready: false, area: 'outdoor', areaTarget: null }),
   area: 'outdoor',
@@ -130,14 +138,20 @@ export const useGame = create<GameState>((set, get) => ({
   banner: { title: 'Elmbrook', subtitle: 'A village at the edge of the Whisperwood', seq: 0 },
   showBanner: (title, subtitle) => set((s) => ({ banner: { title, subtitle, seq: s.banner.seq + 1 } })),
   inventoryOpen: false,
-  setInventoryOpen: (inventoryOpen) => set({ inventoryOpen, menuOpen: inventoryOpen ? false : get().menuOpen }),
+  setInventoryOpen: (inventoryOpen) => {
+    const s = get()
+    if (inventoryOpen && menusBlocked(s)) return
+    set({ inventoryOpen, menuOpen: inventoryOpen ? false : s.menuOpen, prompt: null })
+  },
   night: false,
-  toggleNight: () => set((s) => ({ night: !s.night })),
+  toggleNight: () => {
+    if (!menusBlocked(get())) set((s) => ({ night: !s.night }))
+  },
   dialogue: null,
   visits: {},
   openDialogue: (sourceId, speaker, lines, extra = {}) => {
     const firstOpen = extra.choices?.findIndex((c) => !c.disabled) ?? 0
-    set({ dialogue: { sourceId, speaker, lines, index: 0, revealed: 0, ...extra, choice: Math.max(0, firstOpen) }, prompt: null })
+    set({ dialogue: { sourceId, speaker, lines, index: 0, revealed: 0, ...extra, choice: Math.max(0, firstOpen) }, prompt: null, inventoryOpen: false, menuOpen: false })
   },
   pressDialogue: () => {
     const d = get().dialogue
@@ -181,7 +195,11 @@ export const useGame = create<GameState>((set, get) => ({
     set({ dialogue: { ...d, revealed: Math.min(len, d.revealed + chars) } })
   },
   menuOpen: false,
-  setMenuOpen: (menuOpen) => set({ menuOpen }),
+  setMenuOpen: (menuOpen) => {
+    const s = get()
+    if (menuOpen && menusBlocked(s)) return
+    set({ menuOpen, inventoryOpen: menuOpen ? false : s.inventoryOpen, prompt: null })
+  },
   prompt: null,
   setPrompt: (prompt) => {
     const cur = get().prompt

@@ -78,7 +78,7 @@ function StoryTools() {
         </button>
       </div>
       <div className="dev-row">
-        <button className="dev-btn" onClick={() => fightMoth()}>
+        <button className="dev-btn" onClick={() => { useDev.getState().toggle('open'); fightMoth() }}>
           Start battle
         </button>
         <button

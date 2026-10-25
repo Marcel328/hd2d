@@ -5,6 +5,7 @@ import * as THREE from 'three'
 import { getSpriteAtlas, type SpriteName } from '../gfx/propSprites'
 import { atlasSpritePatch, billboardGeometry, occlusionPatch, patchMaterial } from '../gfx/materialPatches'
 import { PPU } from '../gfx/terrainTexture'
+import { useOwnedResources } from './useOwnedResources'
 
 export interface SpriteInstance {
   sprite: SpriteName
@@ -60,6 +61,7 @@ export function InstancedSprites({ instances, castShadow = false, receiveShadow 
     )
     return { geometry, material, depthMaterial }
   }, [instances, atlas, occlude])
+  useOwnedResources(geometry, material, depthMaterial)
 
   useLayoutEffect(() => {
     const mesh = ref.current

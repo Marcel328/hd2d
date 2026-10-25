@@ -45,6 +45,29 @@ export const BATTLE_ITEMS: Partial<Record<ItemId, BattleItemDef>> = {
 
 export type Action = { type: 'attack' } | { type: 'defend' } | { type: 'item'; id: ItemId }
 
+export type BattleEventKind =
+  | 'attack' | 'counter' | 'defend' | 'heal' | 'fire' | 'blind'
+  | 'buffet' | 'gather' | 'burst' | 'drink' | 'break' | 'miss' | 'recoil'
+
+/** One presentation beat. IDs restart with each session; use both when keying animations. */
+export interface BattleEvent {
+  id: number
+  kind: BattleEventKind
+  target: 'enemy' | 'player'
+  guarded?: boolean
+  outcome?: 'hit' | 'miss' | 'guarded'
+  breaks?: boolean
+}
+
+export const BATTLE_ENTER_MS = 900
+export const BATTLE_EXIT_MS = 650
+/** Shared by the turn scheduler and presentation so an animation finishes before the next beat. */
+export const BATTLE_EFFECT_MS: Record<BattleEventKind, number> = {
+  attack: 640, counter: 720, defend: 640, heal: 760, fire: 820, blind: 760,
+  buffet: 800, gather: 1000, burst: 1250, drink: 1000, break: 720, miss: 640, recoil: 720,
+}
+const BEAT_REST_MS = 140
+
 export interface Pop {
   key: number
   who: 'enemy' | 'player'
@@ -61,6 +84,9 @@ interface Handlers {
 
 export interface BattleState {
   active: boolean
+  session: number
+  transition: 'entering' | 'ready' | 'leaving'
+  event: BattleEvent | null
   phase: 'command' | 'busy' | 'won' | 'lost'
   player: { hp: number; max: number; defending: boolean; counter: boolean }
   enemy: { hp: number; max: number; shield: number; maxShield: number; breakTurns: number; blinded: boolean; step: number }
@@ -80,12 +106,11 @@ export interface BattleState {
 const PLAYER_HP = 50
 const ENEMY_HP = 90
 const SHIELD = 4
-const ENEMY_TURN_MS = 950
-const PLAYER_TURN_MS = 750
 
 let handlers: Handlers | null = null
 let snapshot: Saved | null = null
 let popKey = 0
+let eventKey = 0
 let timer: ReturnType<typeof setTimeout> | null = null
 
 const rand = (a: number, b: number) => a + Math.floor(Math.random() * (b - a + 1))
@@ -104,55 +129,89 @@ function fresh() {
     next: 'buffet' as EnemyMove,
     message: 'The gloam moth rises from the Lantern, wings shedding cold light!',
     pops: [] as Pop[],
+    event: null,
+    hitEnemy: 0,
+    hitPlayer: 0,
     turn: 1,
   }
 }
 
 export const useBattle = create<BattleState>((set, get) => {
-  const pop = (who: Pop['who'], text: string, kind: Pop['kind']) =>
-    set((s) => ({ pops: [...s.pops.slice(-5), { key: ++popKey, who, text, kind }] }))
+  const cancelTimer = () => {
+    if (timer !== null) clearTimeout(timer)
+    timer = null
+  }
 
+  // Every callback belongs to one attempt. A stale timeout must never finish a new fight or
+  // restore its bag after the player has already returned to the story.
   const later = (ms: number, fn: () => void) => {
-    timer = setTimeout(fn, ms)
+    cancelTimer()
+    const session = get().session
+    timer = setTimeout(() => {
+      timer = null
+      if (!get().active || get().session !== session) return
+      fn()
+    }, ms)
+  }
+
+  const event = (kind: BattleEventKind, target: BattleEvent['target'], detail: Partial<BattleEvent> = {}): BattleEvent =>
+    ({ ...detail, id: ++eventKey, kind, target })
+  const pop = (who: Pop['who'], text: string, kind: Pop['kind']): Pop => ({ key: ++popKey, who, text, kind })
+  const withPops = (old: Pop[], added: Pop[]) => [...old, ...added].slice(-6)
+
+  const enter = (message?: string) => {
+    cancelTimer()
+    popKey = eventKey = 0
+    set((s) => ({ active: true, ...fresh(), session: s.session + 1, transition: 'entering', ...(message ? { message } : {}) }))
+    sound.encounter()
+    later(BATTLE_ENTER_MS, () => set({ transition: 'ready' }))
   }
 
   const enemyPhase = () => {
     const s = get()
+    if (!s.active || s.transition !== 'ready' || s.phase !== 'busy') return
     const e = { ...s.enemy }
     const p = { ...s.player }
+    const pops: Pop[] = []
     let message: string
+    let beat: BattleEvent
+    let hitPlayer = s.hitPlayer
 
     if (e.breakTurns > 0) e.breakTurns--
     if (e.breakTurns === 1) {
       message = 'The gloam moth is reeling — it cannot act!'
-      set({ enemy: e, message })
+      beat = event('break', 'enemy')
     } else {
       if (e.breakTurns === 0 && e.shield === 0) {
         e.shield = e.maxShield
-        pop('enemy', 'Guard restored', 'guard')
+        pops.push(pop('enemy', 'Guard restored', 'guard'))
       }
       const move = s.next
       if (move === 'gather') {
         message = 'The moth draws the gloam into its wings…'
+        beat = event('gather', 'enemy')
       } else if (move === 'drink') {
         const heal = Math.min(14, e.max - e.hp)
         e.hp += heal
         message = `It drinks from the Lantern’s flame and recovers ${heal} HP.`
-        pop('enemy', `+${heal}`, 'heal')
+        pops.push(pop('enemy', `+${heal}`, 'heal'))
+        beat = event('drink', 'enemy')
         sound.chime(false)
       } else {
         const base = move === 'burst' ? rand(22, 26) : rand(8, 10)
         if (e.blinded) {
           e.blinded = false
           message = `${MOVES[move].name}! Lost in the flour cloud, it misses completely.`
-          pop('player', 'Miss', 'miss')
+          pops.push(pop('player', 'Miss', 'miss'))
+          beat = event(move, 'player', { outcome: 'miss' })
           sound.guard()
         } else {
           const dmg = p.defending ? Math.max(1, Math.round(base * 0.4)) : base
           p.hp = Math.max(0, p.hp - dmg)
           message = `${MOVES[move].name}! ${p.defending ? `You brace and take only ${dmg}` : `You take ${dmg}`} damage.`
-          pop('player', `−${dmg}`, 'dmg')
-          set((st) => ({ hitPlayer: st.hitPlayer + 1 }))
+          pops.push(pop('player', `−${dmg}`, 'dmg'))
+          hitPlayer++
+          beat = event(move, 'player', { guarded: p.defending, outcome: p.defending ? 'guarded' : 'hit' })
           if (p.defending) sound.guard()
           else sound.hit(move === 'burst')
         }
@@ -160,48 +219,53 @@ export const useBattle = create<BattleState>((set, get) => {
       e.step++
     }
     p.defending = false
-    const next = moveAt(e.step, e.hp, e.max)
-    set({ enemy: e, player: p, message, next })
+    const next = e.step === s.enemy.step ? s.next : moveAt(e.step, e.hp, e.max)
+    set({ enemy: e, player: p, message, next, event: beat, pops: withPops(s.pops, pops), hitPlayer })
 
-    later(ENEMY_TURN_MS, () => {
+    later(BATTLE_EFFECT_MS[beat.kind] + BEAT_REST_MS, () => {
       if (get().player.hp <= 0) {
-        set({ phase: 'lost', message: 'The gloam overwhelms you…' })
+        set({ phase: 'lost', message: 'The gloam overwhelms you…', event: event('recoil', 'player') })
         sound.defeat()
         return
       }
-      set((st) => ({ phase: 'command', turn: st.turn + 1 }))
+      set((st) => ({ phase: 'command', turn: st.turn + 1, event: null }))
     })
   }
 
   return {
     active: false,
+    session: 0,
+    transition: 'ready',
     ...fresh(),
-    hitEnemy: 0,
-    hitPlayer: 0,
     start: (h) => {
+      // Re-entering from a duplicated dialogue callback must not overwrite the pre-fight bag.
+      if (get().active) return
       handlers = h
       snapshot = useInventory.getState().snapshot()
-      if (timer) clearTimeout(timer)
-      set({ active: true, ...fresh() })
-      sound.encounter()
+      enter()
     },
     act: (a) => {
       const s = get()
-      if (s.phase !== 'command') return
+      if (!s.active || s.transition !== 'ready' || s.phase !== 'command') return
       const e = { ...s.enemy }
       const p = { ...s.player }
+      const pops: Pop[] = []
       let message = ''
+      let beat: BattleEvent
+      let hitEnemy = s.hitEnemy
+      let broke = false
       const broken = e.breakTurns > 0
       const damage = (amount: number, shieldLoss: number) => {
         const dmg = broken ? amount * 2 : amount
         e.hp = Math.max(0, e.hp - dmg)
-        pop('enemy', `−${dmg}`, 'dmg')
-        set((st) => ({ hitEnemy: st.hitEnemy + 1 }))
+        pops.push(pop('enemy', `−${dmg}`, 'dmg'))
+        hitEnemy++
         if (!broken && e.shield > 0) {
           e.shield = Math.max(0, e.shield - shieldLoss)
           if (e.shield === 0) {
             e.breakTurns = 2
-            pop('enemy', 'BREAK!', 'break')
+            broke = true
+            pops.push(pop('enemy', 'BREAK!', 'break'))
             sound.breakShield()
             // A broken moth loses whatever it was charging.
             if (s.next === 'burst') {
@@ -219,39 +283,48 @@ export const useBattle = create<BattleState>((set, get) => {
         if (p.counter) {
           p.counter = false
           message = `Counter-strike! ${damage(Math.round(rand(10, 13) * 1.5), 2)}`
-        } else message = `You strike the moth for ${damage(rand(10, 13), 1)}`
+          beat = event('counter', 'enemy', { breaks: broke })
+        } else {
+          message = `You strike the moth for ${damage(rand(10, 13), 1)}`
+          beat = event('attack', 'enemy', { breaks: broke })
+        }
       } else if (a.type === 'defend') {
         p.defending = true
         p.counter = true
         message = 'You raise your guard and wait for an opening.'
-        pop('player', 'Guard', 'guard')
+        pops.push(pop('player', 'Guard', 'guard'))
+        beat = event('defend', 'player')
         sound.guard()
       } else {
         const def = BATTLE_ITEMS[a.id]
-        if (!def || useInventory.getState().remove(a.id, 1) === 0) return
+        if (!def || useInventory.getState().remove(a.id, 1) !== 1) return
         const name = ITEMS[a.id].name
         if (def.heal) {
           const heal = Math.min(def.heal, p.max - p.hp)
           p.hp += heal
           message = `You use ${name} and recover ${heal} HP.`
-          pop('player', `+${heal}`, 'heal')
+          pops.push(pop('player', `+${heal}`, 'heal'))
+          beat = event('heal', 'player')
           sound.chime()
         } else if (def.damage) {
           message = `You hurl the ${name}! It bursts into flame — a weakness! ${damage(def.damage, def.shield ?? 1)}`
-        } else if (def.blind) {
+          beat = event('fire', 'enemy', { breaks: broke })
+        } else {
           e.blinded = true
           message = `You throw the ${name}. A white cloud engulfs the moth — it can’t see!`
-          pop('enemy', 'Blinded', 'miss')
+          pops.push(pop('enemy', 'Blinded', 'miss'))
+          beat = event('blind', 'enemy')
           sound.guard()
         }
       }
-      // Recompute the telegraph if a break cancelled a charge.
-      const next = moveAt(e.step, e.hp, e.max)
-      set({ enemy: e, player: p, message, phase: 'busy', next: e.breakTurns > 0 ? next : s.next })
+      // Keep the announced move stable throughout this player turn. Only breaking a charged
+      // burst cancels it; the flex move is chosen when the next command turn begins.
+      const next = e.step !== s.enemy.step ? moveAt(e.step, e.hp, e.max) : s.next
+      set({ enemy: e, player: p, message, phase: 'busy', next, event: beat, pops: withPops(s.pops, pops), hitEnemy })
 
-      later(PLAYER_TURN_MS, () => {
+      later(BATTLE_EFFECT_MS[beat.kind] + BEAT_REST_MS, () => {
         if (get().enemy.hp <= 0) {
-          set({ phase: 'won', message: 'The gloam moth reels away over the river and vanishes into the Whisperwood!' })
+          set({ phase: 'won', message: 'The gloam moth reels away over the river and vanishes into the Whisperwood!', event: event('recoil', 'enemy') })
           sound.victory()
           return
         }
@@ -259,25 +332,28 @@ export const useBattle = create<BattleState>((set, get) => {
       })
     },
     retry: () => {
-      handlers?.onRetry?.()
+      const s = get()
+      if (!s.active || s.transition !== 'ready' || s.phase !== 'lost') return
       if (snapshot) useInventory.getState().restore(snapshot)
-      if (timer) clearTimeout(timer)
-      set({ ...fresh(), message: 'You steady yourself and face the moth again.' })
-      sound.encounter()
+      enter('You steady yourself and face the moth again.')
+      handlers?.onRetry?.()
     },
     leave: () => {
       const s = get()
-      if (timer) clearTimeout(timer)
+      if (!s.active || s.transition !== 'ready' || (s.phase !== 'won' && s.phase !== 'lost')) return
+      const won = s.phase === 'won'
       const h = handlers
-      handlers = null
-      set({ active: false, pops: [] })
-      if (s.phase === 'won') h?.onWin()
-      else {
-        // Stepping back after a defeat: nothing was spent.
-        if (snapshot) useInventory.getState().restore(snapshot)
-        h?.onRetreat?.()
-      }
-      snapshot = null
+      set({ transition: 'leaving', event: null })
+      later(BATTLE_EXIT_MS, () => {
+        // Clear the old encounter before calling story code, which may start another encounter.
+        const bag = snapshot
+        handlers = null
+        snapshot = null
+        if (!won && bag) useInventory.getState().restore(bag)
+        set({ active: false, transition: 'ready', pops: [], event: null })
+        if (won) h?.onWin()
+        else h?.onRetreat?.()
+      })
     },
   }
 })

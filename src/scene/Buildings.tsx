@@ -1,6 +1,7 @@
 // Timber-framed houses built from pixel-textured boxes. All houses are merged per material,
 // so the whole village is ~10 draw calls regardless of how many houses there are.
 import { useMemo } from 'react'
+import { useOwnedResources } from './useOwnedResources'
 import * as THREE from 'three'
 import { useFrame } from '@react-three/fiber'
 import { HOUSES, type HouseDef, type RoofStyle } from '../game/world/layout'
@@ -131,7 +132,7 @@ function buildHouse(p: Parts, h: HouseDef) {
 }
 
 export function Buildings() {
-  const { meshes, windowMat } = useMemo(() => {
+  const { meshes, windowMat, materials } = useMemo(() => {
     const parts = new Parts()
     HOUSES.forEach((h) => buildHouse(parts, h))
     const s = getSurfaces()
@@ -157,8 +158,9 @@ export function Buildings() {
     const meshes = (Object.keys(parts.b) as Part[])
       .filter((k) => !parts.b[k].empty)
       .map((k) => ({ key: k, geometry: parts.b[k].build(), material: materials[k] }))
-    return { meshes, windowMat }
+    return { meshes, windowMat, materials }
   }, [])
+  useOwnedResources(...meshes.map((mesh) => mesh.geometry), ...Object.values(materials))
 
   useFrame(() => {
     const tod = sampleTimeOfDay(runtime.tod)

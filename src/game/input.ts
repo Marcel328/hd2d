@@ -46,19 +46,20 @@ function actionsFor(code: string): Action[] {
 }
 
 function onKeyDown(e: KeyboardEvent) {
+  if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return
   const target = e.target as HTMLElement | null
   const tag = target?.tagName
   const type = tag === 'INPUT' ? (target as HTMLInputElement).type : ''
   // Only text entry keeps the keyboard; checkboxes, sliders and buttons hand it back to the game.
   const textEntry = tag === 'TEXTAREA' || tag === 'SELECT' || (tag === 'INPUT' && !['checkbox', 'radio', 'range', 'button'].includes(type))
-  if (textEntry) return
+  if (textEntry || target?.isContentEditable) return
   const actions = actionsFor(e.code)
   if (actions.length === 0) return
   const controlKey = e.code === 'Space' || e.code === 'Enter' || e.code.startsWith('Arrow')
   if (target && (tag === 'BUTTON' || tag === 'INPUT') && controlKey) {
     // Keyboard-focused controls keep their keys (accessibility); a control that merely kept
     // focus after a mouse click gives them back to the game instead of re-triggering.
-    if (target.matches(':focus-visible')) return
+    if (target.closest('[role="dialog"]') || target.matches(':focus-visible')) return
     e.preventDefault()
     target.blur()
   }
@@ -86,15 +87,27 @@ function clear() {
   held.clear()
   pressed.clear()
   dirOrder.length = 0
+  virtualPad.x = virtualPad.y = 0
+  virtualPad.run = false
 }
 
-let attached = false
-export function attachInput() {
-  if (attached) return
-  attached = true
-  window.addEventListener('keydown', onKeyDown)
-  window.addEventListener('keyup', onKeyUp)
-  window.addEventListener('blur', clear)
+let attachments = 0
+export function attachInput(): () => void {
+  if (attachments++ === 0) {
+    window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('keyup', onKeyUp)
+    window.addEventListener('blur', clear)
+  }
+  let detached = false
+  return () => {
+    if (detached) return
+    detached = true
+    if (--attachments > 0) return
+    window.removeEventListener('keydown', onKeyDown)
+    window.removeEventListener('keyup', onKeyUp)
+    window.removeEventListener('blur', clear)
+    clear()
+  }
 }
 
 export function isHeld(a: Action): boolean {

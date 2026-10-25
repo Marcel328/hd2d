@@ -25,6 +25,7 @@ import { searchSpot } from '../game/scavenge'
 import { useInventory } from '../game/inventory'
 import { runtime, useGame } from '../game/state'
 import { sampleTimeOfDay } from './timeOfDay'
+import { useOwnedResources } from './useOwnedResources'
 
 type ShellPart = 'plaster' | 'wainscot' | 'timber' | 'cap' | 'stone' | 'floor'
 
@@ -113,7 +114,7 @@ function buildFurniture() {
 }
 
 function useInteriorMaterials() {
-  return useMemo(() => {
+  const materials = useMemo(() => {
     const s = getSurfaces()
     const i = getInteriorSurfaces()
     const std = (map: THREE.Texture | null, extra: THREE.MeshStandardMaterialParameters = {}) =>
@@ -146,11 +147,16 @@ function useInteriorMaterials() {
       doormat: new THREE.MeshStandardMaterial({ map: i.doormat, roughness: 1, polygonOffset: true, polygonOffsetFactor: -1 }),
     }
   }, [])
+  useOwnedResources(
+    ...Object.values(materials.shell), ...Object.values(materials.furniture),
+    materials.window, materials.rug, materials.doormat,
+  )
+  return materials
 }
 
 function Hearth({ soot }: { soot: THREE.MeshStandardMaterial }) {
   const flame = useRef<THREE.Mesh>(null!)
-  const { material, glow } = useMemo(() => {
+  const { material, glow, texture } = useMemo(() => {
     const tex = getFlameTexture().clone()
     tex.needsUpdate = true
     // Colour above 1.0 keeps the fire bright enough to bloom.
@@ -164,9 +170,10 @@ function Hearth({ soot }: { soot: THREE.MeshStandardMaterial }) {
       opacity: 0.55,
       fog: false,
     })
-    return { material, glow }
+    return { material, glow, texture: tex }
   }, [])
   const geometry = useMemo(() => billboardGeometry(0.75, 1.0), [])
+  useOwnedResources(material, glow, texture, geometry)
 
   useFrame(() => {
     const t = runtime.time
@@ -204,6 +211,7 @@ function WindowLight({ material }: { material: THREE.MeshStandardMaterial }) {
   )
   const day = new THREE.Color('#d8ecff')
   const night = new THREE.Color('#5a6aa8')
+  useOwnedResources(beam)
   useFrame(() => {
     const tod = sampleTimeOfDay(runtime.tod)
     const d = 1 - runtime.tod
@@ -232,7 +240,7 @@ function WindowLight({ material }: { material: THREE.MeshStandardMaterial }) {
 function SearchGlints() {
   const looted = useInventory((s) => s.looted)
   const refs = useRef<(THREE.Mesh | null)[]>([])
-  const { geometry, material } = useMemo(() => {
+  const { geometry, material, texture } = useMemo(() => {
     const atlas = getSpriteAtlas()
     const r = atlas.rects.sparkle
     const tex = atlas.texture.clone()
@@ -240,10 +248,12 @@ function SearchGlints() {
     tex.repeat.set(r.su, r.sv)
     tex.needsUpdate = true
     return {
+      texture: tex,
       geometry: billboardGeometry(9 / 16, 9 / 16),
       material: new THREE.MeshBasicMaterial({ map: tex, alphaTest: 0.5, color: new THREE.Color(2.2, 2.0, 1.4), fog: false }),
     }
   }, [])
+  useOwnedResources(geometry, material, texture)
   useFrame(() => {
     COTTAGE_SPOTS.forEach((_, i) => {
       const m = refs.current[i]
@@ -291,6 +301,7 @@ export function Interior() {
     const b = buildFurniture()
     return (Object.keys(b) as FurnitureMaterial[]).map((k) => ({ key: k, geometry: b[k].build(), material: mats.furniture[k] }))
   }, [mats])
+  useOwnedResources(...shell.map((mesh) => mesh.geometry), ...furniture.map((mesh) => mesh.geometry))
   const sprites = useMemo<SpriteInstance[]>(
     () => COTTAGE_SPRITES.map((p) => ({ sprite: p.sprite as SpriteName, x: p.x, y: p.y, z: p.z, scale: p.scale, flip: p.flip })),
     [],
