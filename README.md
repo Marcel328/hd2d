@@ -1,4 +1,4 @@
-# Elmbrook — HD-2D village demo
+# The Last Lantern — HD-2D village demo
 
 A browser HD-2D tech demo in the visual language of *Octopath Traveler*: pixel-art sprites in a
 lit 3D diorama with shadows, warm lanterns, fog, bloom and tilt-shift depth of field.
