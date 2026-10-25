@@ -92,6 +92,10 @@ export let DOOR_LANTERNS = HOUSES.map((h) => ({
   z: h.z1 + 0.14,
 }))
 
+/** The Last Lantern: the great lantern every other flame was lit from (Riverside Mill only). */
+export let BEACON: { x: number; z: number } | null = null
+export const BEACON_HEIGHT = 2.75
+
 export let LIGHT_SOURCES: LightSource[] = [
   ...LAMP_POSTS.map((l) => ({ x: l.x, y: LAMP_HEIGHT, z: l.z, power: 1 })),
   ...DOOR_LANTERNS.map((l) => ({ ...l, power: 0.7 })),
@@ -194,7 +198,7 @@ export let FENCE_SEGMENTS: [number, number, number, number][] = [
 export let BRIDGE = { x0: 19, x1: 21, z0: 7, z1: 9 }
 
 export interface NpcDef {
-  id: 'rowan' | 'mira'
+  id: 'rowan' | 'mira' | 'brann'
   name: string
   x: number
   z: number
@@ -224,7 +228,12 @@ export const PLAYER_SPAWN = { x: 12, z: 19.4, facing: 'up' as Dir }
 export const VILLAGE_LAYOUT = {
   houses: HOUSES, lamps: LAMP_POSTS, well: WELL, signpost: SIGNPOST,
   bushes: BUSHES, props: PROPS, fences: FENCE_SEGMENTS, bridge: BRIDGE, npcs: NPCS, trees: VILLAGE_TREES,
+  beacon: null as { x: number; z: number } | null,
 }
+
+/** Brann, once the moth has been dealt with: home in Elmbrook, or in the mill yard. */
+export const BRANN_AT_HOME: NpcDef = { id: 'brann', name: 'Brann', x: 16.6, z: 6.55, facing: 'down' }
+export const BRANN_AT_MILL: NpcDef = { id: 'brann', name: 'Brann', x: 13.1, z: 16.1, facing: 'right' }
 
 export function setLayout(layout: typeof VILLAGE_LAYOUT) {
   HOUSES = layout.houses
@@ -237,9 +246,11 @@ export function setLayout(layout: typeof VILLAGE_LAYOUT) {
   BRIDGE = layout.bridge
   NPCS = layout.npcs
   VILLAGE_TREES = layout.trees
+  BEACON = layout.beacon
   DOOR_LANTERNS = HOUSES.map((h) => ({ x: h.doorX + h.lanternSide * 0.82, y: 1.75, z: h.z1 + 0.14 }))
   LIGHT_SOURCES = [
     ...LAMP_POSTS.map((l) => ({ x: l.x, y: LAMP_HEIGHT, z: l.z, power: 1 })),
     ...DOOR_LANTERNS.map((l) => ({ ...l, power: 0.7 })),
+    ...(BEACON ? [{ x: BEACON.x, y: BEACON_HEIGHT, z: BEACON.z, power: 1.5 }] : []),
   ]
 }

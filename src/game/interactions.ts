@@ -1,6 +1,10 @@
 // Things the player can talk to or read, and what they say.
 import { SIGNPOST, WELL } from './world/layout'
 import type { AreaId } from './world/interiors'
+import type { Conversation } from './state'
+import { BEACON } from './world/layout'
+import { brannTalk, lanternTalk, millDoorTalk, miraTalk, rowanTalk, storehouseTalk, type TalkContext } from './script'
+import { useStory } from './story'
 
 export interface Interactable {
   id: string
@@ -14,7 +18,12 @@ export interface Interactable {
   reach: number
   /** Height of the prompt icon above the ground. */
   iconHeight: number
-  lines: (ctx: { night: boolean; visits: number }) => string[]
+  /** Simple flavour text… */
+  lines?: (ctx: TalkContext) => string[]
+  /** …or a full conversation (speakers, choices, story effects). */
+  talk?: (ctx: TalkContext) => Conversation
+  /** Prompt verb override, e.g. "Knock on". */
+  verb?: string
 }
 
 export const interactables = new Map<string, Interactable>()
@@ -38,42 +47,7 @@ export function unregisterInteractable(i: Interactable) {
   if (interactables.get(i.id) === i) interactables.delete(i.id)
 }
 
-const DIALOGUE: Record<string, Interactable['lines']> = {
-  rowan: ({ night, visits }) => {
-    if (night)
-      return [
-        'The lanterns are lit. See how they hold back the dark?',
-        'My grandmother swore they kept the forest spirits at bay. Superstition, perhaps…',
-        '…but in seventy winters I have never once let them go out.',
-      ]
-    if (visits === 0)
-      return [
-        'Well now — a traveller! It has been many seasons since the Highroad brought us a new face.',
-        'Welcome to Elmbrook. We are a small village, but the well water is sweet and the inn keeps a warm hearth.',
-        'Wander as you please. And should the sun begin to set, mind the lanterns.',
-      ]
-    return [
-      'The creek runs down from the Whisperwood hills, clear as glass.',
-      'Mira swears she once saw a heron in it the size of a hay cart. Ha! Children.',
-    ]
-  },
-  mira: ({ night, visits }) => {
-    if (night)
-      return [
-        'Shh… look! The fireflies are out.',
-        'They only come down to the creek on warm nights. Elder Rowan says they are the souls of old lantern-keepers.',
-        'I think they just like the water.',
-      ]
-    if (visits === 0)
-      return [
-        'Oh! Hello! Are you here for the harvest festival? You are a little early — the cabbages are not even ready yet.',
-        'I am Mira. I look after the garden while Father works the mill across the river.',
-      ]
-    return [
-      'Follow the road east over the bridge and you will reach the old mill. Tell Father I said hello!',
-      'Oh, and if you are short on supplies, our cottage is the one with the slate roof. Father leaves a chest out for travellers — help yourself!',
-    ]
-  },
+const DIALOGUE: Record<string, NonNullable<Interactable['lines']>> = {
   signpost: () => [
     '↑  North — Whisperwood\n      (the trail is overgrown)\n→  East — Riverside Mill\n↓  South — The Highroad to Port Calder',
   ],
@@ -92,17 +66,40 @@ export function buildInteractables(mill: boolean) {
   if (!mill) registerInteractable({
     id: 'well', kind: 'read', name: 'Old Well', pos: { ...WELL }, reach: 1.45, iconHeight: 2.6, lines: DIALOGUE.well,
   })
-  if (mill) registerInteractable({
-    id: 'mill', kind: 'read', name: 'Riverside Mill', pos: { x: 15.5, z: 14.3 }, reach: 1.6, iconHeight: 2.3,
-    lines: ({ night }) => night
-      ? ['The mill is closed for the night. The waterwheel keeps turning in the moonlight.']
-      : ['Fresh flour — milled by the river since 1842.', 'A note on the door: “Delivering flour to Elmbrook. Back soon. — Mira’s father”'],
-  })
+  if (mill) {
+    registerInteractable({
+      id: 'mill', kind: 'read', name: 'Mill Door', pos: { x: 15.5, z: 13.85 }, reach: 1.4, iconHeight: 2.3, talk: millDoorTalk,
+    })
+    registerInteractable({
+      id: 'storehouse', kind: 'talk', verb: 'Knock on', name: 'Storehouse Door', pos: { x: 6, z: 6.25 }, reach: 1.3,
+      iconHeight: 2.0, talk: storehouseTalk,
+    })
+    if (BEACON)
+      registerInteractable({
+        id: 'lantern',
+        kind: 'talk',
+        // The moth sits on the Lantern until the story resolves it.
+        get verb() {
+          return useStory.getState().ending ? 'Look at' : 'Approach'
+        },
+        get name() {
+          return useStory.getState().ending ? 'The Last Lantern' : 'Gloam Moth'
+        },
+        pos: { x: BEACON.x, z: BEACON.z },
+        reach: 1.75,
+        iconHeight: 3.4,
+        talk: lanternTalk,
+      })
+  }
 }
 
-export function npcLines(id: string): Interactable['lines'] {
-  return DIALOGUE[id]
+/** Story conversations for NPCs by id. */
+export const NPC_TALK: Record<string, (ctx: TalkContext) => Conversation> = {
+  rowan: rowanTalk,
+  mira: miraTalk,
+  brann: brannTalk,
 }
+
 
 /**
  * Best interactable for the player: in reach and roughly in front of them.

@@ -12,6 +12,9 @@ export type ItemId =
   | 'honey'
   | 'oil'
   | 'flour'
+  | 'journal'
+  | 'scale'
+  | 'wingdust'
 
 export type Category = 'supplies' | 'materials' | 'key'
 
@@ -87,7 +90,26 @@ export const ITEMS: Record<ItemId, ItemDef> = {
     id: 'flour',
     name: 'Riverside Flour',
     category: 'materials',
-    description: 'A pouch of fine flour, stone-ground at the Riverside Mill.',
+    description: 'A pouch of fine flour, stone-ground at the Riverside Mill. Makes a fine cloud if thrown.',
+  },
+  journal: {
+    id: 'journal',
+    name: "Keeper's Journal Page",
+    category: 'key',
+    description:
+      '“A starving gloam will take oil freely given, and guard the flame that fed it. Drive one off by force and it takes the night’s small lights with it.” — from Brann’s journal',
+  },
+  scale: {
+    id: 'scale',
+    name: 'Gloam Scale',
+    category: 'materials',
+    description: 'A dusty, violet wing-scale shed by the gloam moth as it fled. It is cold to the touch.',
+  },
+  wingdust: {
+    id: 'wingdust',
+    name: 'Glimmering Wing-dust',
+    category: 'materials',
+    description: 'A pinch of dust from the gloam moth’s wings, given freely. It glows like a firefly in the dark.',
   },
 }
 
@@ -111,6 +133,7 @@ export const LOOT: Record<string, Loot> = {
   'cottage-cupboard': { items: [['bread', 2], ['honey', 1]] },
   'cottage-chest': { items: [['oil', 1], ['herb', 2]], gold: 30 },
   'cottage-sacks': { items: [['flour', 1]] },
+  'cottage-bookshelf': { items: [['journal', 1]] },
 }
 
 const MAX_STACK = 99
@@ -133,12 +156,19 @@ interface InventoryState {
   markSeen: (id: ItemId) => void
   /** Take a spot's loot once; returns what was found, or null if it was already emptied. */
   loot: (spotId: string) => Loot | null
+  /** Remove up to `qty`; returns how many were removed. */
+  remove: (id: ItemId, qty?: number) => number
+  has: (id: ItemId) => boolean
+  count: (id: ItemId) => number
+  /** Battles restore the bag on retry. */
+  snapshot: () => Saved
+  restore: (s: Saved) => void
   reset: () => void
 }
 
 const SAVE_KEY = 'hd2d-village-save-v1'
 
-interface Saved {
+export interface Saved {
   slots: Slot[]
   gold: number
   fresh: ItemId[]
@@ -192,6 +222,20 @@ export const useInventory = create<InventoryState>((set, get) => ({
     set((s) => ({ looted: { ...s.looted, [spotId]: true } }))
     return table
   },
+  remove: (id, qty = 1) => {
+    const slot = get().slots.find((sl) => sl.id === id)
+    if (!slot) return 0
+    const n = Math.min(qty, slot.qty)
+    set((s) => ({ slots: s.slots.map((sl) => (sl.id === id ? { ...sl, qty: sl.qty - n } : sl)).filter((sl) => sl.qty > 0) }))
+    return n
+  },
+  has: (id) => get().slots.some((sl) => sl.id === id && sl.qty > 0),
+  count: (id) => get().slots.find((sl) => sl.id === id)?.qty ?? 0,
+  snapshot: () => {
+    const { slots, gold, fresh: f, looted } = get()
+    return { slots: slots.map((sl) => ({ ...sl })), gold, fresh: [...f], looted: { ...looted } }
+  },
+  restore: (s) => set({ slots: s.slots.map((sl) => ({ ...sl })), gold: s.gold, fresh: [...s.fresh], looted: { ...s.looted } }),
   reset: () => set(fresh()),
 }))
 
@@ -217,18 +261,20 @@ export interface Toast {
   key: number
   icon: ItemId | 'gold' | null
   text: string
+  label: string
 }
 
 interface ToastState {
   toasts: Toast[]
-  push: (icon: Toast['icon'], text: string) => void
+  push: (icon: Toast['icon'], text: string, label?: string) => void
   dismiss: (key: number) => void
 }
 
 let toastKey = 0
 export const useToasts = create<ToastState>((set) => ({
   toasts: [],
-  push: (icon, text) => set((s) => ({ toasts: [...s.toasts.slice(-3), { key: ++toastKey, icon, text }] })),
+  push: (icon, text, label = 'Obtained') =>
+    set((s) => ({ toasts: [...s.toasts.slice(-3), { key: ++toastKey, icon, text, label }] })),
   dismiss: (key) => set((s) => ({ toasts: s.toasts.filter((t) => t.key !== key) })),
 }))
 

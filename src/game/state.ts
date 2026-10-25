@@ -32,17 +32,40 @@ export const runtime = {
   dprScale: 1,
 }
 
+/** A line of dialogue; an object form can change who is speaking ('' = narration). */
+export type Line = string | { speaker: string; text: string }
+
+export const lineText = (l: Line) => (typeof l === 'string' ? l : l.text)
+
+export interface Choice {
+  id: string
+  label: string
+  disabled?: boolean
+}
+
+/** What an interaction says, and optionally a choice at the end plus what happens after. */
+export interface Conversation {
+  lines: Line[]
+  choices?: Choice[]
+  onDone?: (choice: string | null) => void
+}
+
 export interface DialogueState {
   sourceId: string
   speaker: string
-  lines: string[]
+  lines: Line[]
   index: number
   revealed: number
+  choices?: Choice[]
+  /** Highlighted choice. */
+  choice: number
+  onDone?: (choice: string | null) => void
 }
 
 export interface Prompt {
   kind: 'talk' | 'read' | 'search'
   name: string
+  verb?: string
 }
 
 export interface Banner {
@@ -71,9 +94,11 @@ interface GameState {
   toggleNight: () => void
   dialogue: DialogueState | null
   visits: Record<string, number>
-  openDialogue: (sourceId: string, speaker: string, lines: string[]) => void
+  openDialogue: (sourceId: string, speaker: string, lines: Line[], extra?: Omit<Conversation, 'lines'>) => void
   /** Reveal the whole line if it is still typing, otherwise go to the next line or close. */
   pressDialogue: () => void
+  moveChoice: (delta: number) => void
+  pickChoice: (index: number) => void
   revealMore: (chars: number) => void
   menuOpen: boolean
   setMenuOpen: (v: boolean) => void
@@ -110,24 +135,48 @@ export const useGame = create<GameState>((set, get) => ({
   toggleNight: () => set((s) => ({ night: !s.night })),
   dialogue: null,
   visits: {},
-  openDialogue: (sourceId, speaker, lines) =>
-    set({ dialogue: { sourceId, speaker, lines, index: 0, revealed: 0 }, prompt: null }),
+  openDialogue: (sourceId, speaker, lines, extra = {}) => {
+    const firstOpen = extra.choices?.findIndex((c) => !c.disabled) ?? 0
+    set({ dialogue: { sourceId, speaker, lines, index: 0, revealed: 0, ...extra, choice: Math.max(0, firstOpen) }, prompt: null })
+  },
   pressDialogue: () => {
     const d = get().dialogue
     if (!d) return
-    const line = d.lines[d.index]
-    if (d.revealed < line.length) {
-      set({ dialogue: { ...d, revealed: line.length } })
+    const len = lineText(d.lines[d.index]).length
+    if (d.revealed < len) {
+      set({ dialogue: { ...d, revealed: len } })
     } else if (d.index + 1 < d.lines.length) {
       set({ dialogue: { ...d, index: d.index + 1, revealed: 0 } })
+    } else if (d.choices?.length) {
+      get().pickChoice(d.choice)
     } else {
       set((s) => ({ dialogue: null, visits: { ...s.visits, [d.sourceId]: (s.visits[d.sourceId] ?? 0) + 1 } }))
+      d.onDone?.(null)
     }
+  },
+  moveChoice: (delta) => {
+    const d = get().dialogue
+    if (!d?.choices?.length) return
+    const n = d.choices.length
+    let i = d.choice
+    // Skip disabled options.
+    for (let k = 0; k < n; k++) {
+      i = (i + delta + n) % n
+      if (!d.choices[i].disabled) break
+    }
+    set({ dialogue: { ...d, choice: i } })
+  },
+  pickChoice: (index) => {
+    const d = get().dialogue
+    const c = d?.choices?.[index]
+    if (!d || !c || c.disabled) return
+    set((s) => ({ dialogue: null, visits: { ...s.visits, [d.sourceId]: (s.visits[d.sourceId] ?? 0) + 1 } }))
+    d.onDone?.(c.id)
   },
   revealMore: (chars) => {
     const d = get().dialogue
     if (!d) return
-    const len = d.lines[d.index].length
+    const len = lineText(d.lines[d.index]).length
     if (d.revealed >= len) return
     set({ dialogue: { ...d, revealed: Math.min(len, d.revealed + chars) } })
   },
@@ -136,7 +185,7 @@ export const useGame = create<GameState>((set, get) => ({
   prompt: null,
   setPrompt: (prompt) => {
     const cur = get().prompt
-    if (cur?.kind === prompt?.kind && cur?.name === prompt?.name) return
+    if (cur?.kind === prompt?.kind && cur?.name === prompt?.name && cur?.verb === prompt?.verb) return
     set({ prompt })
   },
   ready: false,

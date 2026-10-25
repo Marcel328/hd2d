@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useDev, type DevState } from '../game/dev'
 import { useInventory } from '../game/inventory'
+import { useStory, type Stage } from '../game/story'
+import { fightMoth } from '../game/script'
 import { runtime, useGame } from '../game/state'
 import { getBody, placeBody } from '../game/world/collision'
 import { PLAYER_SPAWN } from '../game/world/layout'
@@ -41,6 +43,56 @@ function Check({ k, label, hint }: { k: ToggleKey; label: string; hint?: string 
       <span>{label}</span>
       {hint && <kbd>{hint}</kbd>}
     </label>
+  )
+}
+
+const STAGES: Stage[] = ['intro', 'arrive', 'warned', 'helping', 'confront']
+
+function StoryTools() {
+  const stage = useStory((s) => s.stage)
+  const ending = useStory((s) => s.ending)
+  return (
+    <section>
+      <h3>
+        Story · {stage}
+        {ending ? ` · ${ending}` : ''}
+      </h3>
+      <div className="dev-grid">
+        {STAGES.map((st) => (
+          <button
+            key={st}
+            className={stage === st ? 'dev-btn on' : 'dev-btn'}
+            onClick={() => useStory.setState({ stage: st, ending: null, brannHome: false, showEnding: false })}
+          >
+            {st}
+          </button>
+        ))}
+        <button className="dev-btn" onClick={() => useStory.getState().resolve('fireflies')}>
+          fireflies
+        </button>
+        <button className="dev-btn" onClick={() => useStory.getState().resolve('bright')}>
+          bright
+        </button>
+        <button className="dev-btn" onClick={() => useStory.getState().finish()}>
+          ending card
+        </button>
+      </div>
+      <div className="dev-row">
+        <button className="dev-btn" onClick={() => fightMoth()}>
+          Start battle
+        </button>
+        <button
+          className="dev-btn"
+          onClick={() => {
+            const inv = useInventory.getState()
+            if (!inv.has('oil')) inv.add('oil')
+            if (!inv.has('journal')) inv.add('journal')
+          }}
+        >
+          Give oil + page
+        </button>
+      </div>
+    </section>
   )
 }
 
@@ -166,6 +218,8 @@ export function DevPanel() {
           Reset save (bag &amp; searched spots)
         </button>
       </section>
+
+      <StoryTools />
 
       <section className="dev-live">
         <h3>Live</h3>

@@ -29,7 +29,7 @@ export interface CharacterLook {
   staff?: boolean
 }
 
-export const LOOKS: Record<'player' | 'rowan' | 'mira', CharacterLook> = {
+export const LOOKS: Record<'player' | 'rowan' | 'mira' | 'brann', CharacterLook> = {
   player: {
     skin: '#f0c49a',
     hair: '#6b3d22',
@@ -63,6 +63,18 @@ export const LOOKS: Record<'player' | 'rowan' | 'mira', CharacterLook> = {
     hairStyle: 'ponytail',
     dress: true,
     apron: '#f4ecd8',
+  },
+  // The miller: flour-dusted apron, ginger beard like his daughter's hair.
+  brann: {
+    skin: '#e9b98f',
+    hair: '#b8642a',
+    coat: '#7a5a3a',
+    trim: '#3e2a1c',
+    pants: '#4a3f36',
+    boots: '#3a2618',
+    hairStyle: 'short',
+    beard: '#b8642a',
+    apron: '#ece4d2',
   },
 }
 
@@ -184,6 +196,9 @@ function paint(look: CharacterLook, pose: Pose): PartBuffer {
     b.rect(x0, 11 + y0, w, 7, P.Coat)
     b.rect(x0, 16 + y0, w, 1, P.Trim) // belt
     if (facing === 'down') b.set(7, 16 + y0, P.Boots) // buckle
+    // A work apron over the tunic, down to the knees.
+    if (look.apron && facing === 'down') b.rect(5, 13 + y0, 6, 7, P.Apron)
+    else if (look.apron && facing === 'side') b.rect(8, 13 + y0, 3, 7, P.Apron)
   }
 
   // ---- arms ----

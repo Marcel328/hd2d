@@ -7,7 +7,9 @@ import { getBlobShadowTexture, getSpriteAtlas } from '../gfx/propSprites'
 import { sharedUniforms } from '../gfx/materialPatches'
 import { consumePress, isHeld, latestDirection, virtualPad } from '../game/input'
 import { moveBody, registerBody, unregisterBody, type Body } from '../game/world/collision'
-import { findFocus, interactables, npcLines, registerInteractable, unregisterInteractable, type Interactable } from '../game/interactions'
+import { findFocus, interactables, NPC_TALK, registerInteractable, unregisterInteractable, type Interactable } from '../game/interactions'
+import { useBattle } from '../game/battle'
+import { useStory } from '../game/story'
 import { runtime, useGame } from '../game/state'
 import type { Dir, NpcDef } from '../game/world/layout'
 import { exitAt } from '../game/world/scenes'
@@ -121,9 +123,20 @@ export function Player() {
       runtime.player.moving = false
       return
     }
+    // Battles and story cards take over the screen.
+    const story = useStory.getState()
+    if (useBattle.getState().active || story.stage === 'intro' || story.showEnding) {
+      state.moving = false
+      runtime.player.moving = false
+      runtime.focusId = null
+      game.setPrompt(null)
+      return
+    }
     if (game.dialogue) {
       state.moving = false
       if (consumePress('interact')) game.pressDialogue()
+      if (consumePress('up')) game.moveChoice(-1)
+      if (consumePress('down')) game.moveChoice(1)
       return
     }
 
@@ -187,10 +200,11 @@ export function Player() {
     const [fx, fz] = DIR_VEC[state.facing]
     const focus = uiOpen ? null : findFocus(body.x, body.z, fx, fz)
     runtime.focusId = focus?.id ?? null
-    game.setPrompt(focus ? { kind: focus.kind, name: focus.name } : null)
+    game.setPrompt(focus ? { kind: focus.kind, name: focus.name, verb: focus.verb } : null)
     if (focus && consumePress('interact')) {
-      const lines = focus.lines({ night: game.night, visits: game.visits[focus.id] ?? 0 })
-      game.openDialogue(focus.id, focus.name, lines)
+      const ctx = { night: game.night, visits: game.visits[focus.id] ?? 0 }
+      const conv = focus.talk ? focus.talk(ctx) : { lines: focus.lines?.(ctx) ?? [] }
+      game.openDialogue(focus.id, focus.name, conv.lines, { choices: conv.choices, onDone: conv.onDone })
       sound.chime()
     }
   }, -2)
@@ -213,7 +227,7 @@ export function Npc({ def }: { def: NpcDef }) {
       pos: body,
       reach: 1.3,
       iconHeight: 1.95,
-      lines: npcLines(def.id),
+      talk: NPC_TALK[def.id],
     }
     registerBody(body)
     registerInteractable(it)

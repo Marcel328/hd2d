@@ -1,7 +1,7 @@
 // Circle-vs-box collision against a static, tile-bucketed list of boxes, plus circles for
 // characters. Movement is sub-stepped so nothing tunnels through thin fences.
 import { MAP_H, MAP_W, isBlockingTerrain, terrainAt } from './map'
-import { BUSHES, FENCE_SEGMENTS, HOUSES, LAMP_POSTS, PROPS, SIGNPOST, WELL, type TreeDef } from './layout'
+import { BEACON, BUSHES, FENCE_SEGMENTS, HOUSES, LAMP_POSTS, PROPS, SIGNPOST, WELL, type TreeDef } from './layout'
 import type { AreaId } from './interiors'
 
 export interface Box {
@@ -99,6 +99,7 @@ export function buildCollision(villageTrees: TreeDef[]) {
     addBox({ x0: p.x - s, z0: p.z - s, x1: p.x + s, z1: p.z + s })
   }
   for (const [x0, z0, x1, z1] of FENCE_SEGMENTS) addSegment(x0, z0, x1, z1, 0.08)
+  if (BEACON) addBox({ x0: BEACON.x - 0.42, z0: BEACON.z - 0.38, x1: BEACON.x + 0.42, z1: BEACON.z + 0.38 })
 }
 
 /** Build an interior's collision world from its wall and furniture boxes. */

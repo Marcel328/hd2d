@@ -4,6 +4,8 @@ import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } f
 import { virtualPad, virtualPress } from '../game/input'
 import { useSettings } from '../game/settings'
 import { useGame } from '../game/state'
+import { useBattle } from '../game/battle'
+import { useStory } from '../game/story'
 
 const STICK_RADIUS = 46
 
@@ -73,7 +75,9 @@ export function TouchControls() {
   const bagOpen = useGame((s) => s.inventoryOpen)
   const prompt = useGame((s) => s.prompt)
   const [running, setRunning] = useState(false)
-  const hidden = !!dialogue || bagOpen
+  const battle = useBattle((s) => s.active)
+  const card = useStory((s) => s.stage === 'intro' || s.showEnding)
+  const hidden = !!dialogue || bagOpen || battle || card
   useEffect(() => {
     if (!hidden) return
     virtualPad.run = false

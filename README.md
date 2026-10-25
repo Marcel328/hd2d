@@ -25,7 +25,8 @@ npm run preview    # serve the production bundle
 | --- | --- |
 | WASD / arrow keys | Walk (four-directional facing) |
 | Shift | Run |
-| E / Space / Enter | Talk, read, search, advance dialogue |
+| E / Space / Enter | Talk, read, search, advance dialogue, confirm |
+| ↑ / ↓ (in dialogue or battle) | Choose an answer or command |
 | N | Toggle day / night |
 | I or B | Open / close the bag |
 | M | Mute / unmute sound |
@@ -36,6 +37,52 @@ npm run preview    # serve the production bundle
 On phones and tablets an analog stick, a **Talk/Read/Search** button and a hold-to-**Run** button appear
 automatically (toggle under Settings → *On-screen touch controls*). Tap the dialogue box to
 advance it.
+
+## The Last Lantern (the story)
+
+A short adventure that strings the whole demo together — village, cottage and mill — and gives
+the lighting system a narrative job.
+
+1. **Arrival.** An intro card sets the objective: deliver a sealed letter to Elder Rowan.
+2. **The letter.** Rowan recognises the heron seal of the Lantern Wardens. Every lantern in
+   Elmbrook was lit from the *Last Lantern* at Riverside Mill, a gloam moth is feeding on it, and
+   its keeper Brann hasn't come home. Night falls as he finishes, and the street lamps gutter.
+3. **Mira's stake.** Brann is her father. She sends you to Ashdown Cottage for lantern oil (the
+   chest) and his journal page (the bookshelf), then east to the mill.
+4. **The mill.** Brann is trapped in the storehouse. The moth clings to the Last Lantern.
+5. **The choice.** Offer it the oil, or drive it away. Brann's journal page hints at the cost of
+   each. Driving it away starts the battle below.
+6. **The return.** The lanterns visibly change, NPCs react to what you did, Rowan closes the
+   story, and an ending card offers **Play again**.
+
+| Ending | How | Lanterns | Fireflies |
+| --- | --- | --- | --- |
+| **A Night of Fireflies** | Feed the moth the oil | Soft green-gold; the moth sleeps on the Last Lantern as its guardian | Twice as many |
+| **The Bright Lanterns** | Win the battle | Blazing gold, the brightest in the valley | None |
+
+**Directions never get lost.** The objective tracker (top left) always says what to do and where,
+in any scene, day or night. Every NPC repeats the current directions on repeat conversations and
+at night, too.
+
+### The battle
+
+One small Octopath-style encounter: Attack, Defend, Items, and a readable enemy.
+
+- The moth's **next move is always shown**. It loops: Wing Buffet → Gathering Gloam (a telegraph)
+  → **Gloam Burst** (heavy) → Wing Buffet → Drink Light (heals, only when it is below half).
+- **Shield and Break:** 4 shield points. Attack removes 1, Lantern Oil (its weakness: fire)
+  removes 2. At 0 it **breaks**: it loses its next action, takes double damage, and a charged
+  Gloam Burst fizzles.
+- **Defend** takes 40% damage and readies a **counter-strike** (×1.5 damage, −2 shields).
+- **Items:** herbs, rations, bread and honey heal. Thrown flour blinds the moth so its next
+  attack misses.
+- **Defeat** offers *Retry* (the bag is restored to how it was) or *Step back* to choose again.
+
+Tuning, checked by simulating 500 fights: attacking every turn wins about 25% of the time;
+defending when the burst is telegraphed wins about 99%; defending plus herbs, 100%.
+
+The story and the bag are saved in `localStorage`. *New game* is in Settings, and the developer
+panel can jump to any story stage, either ending, or straight into the battle.
 
 ## What's in the scenes
 
@@ -48,7 +95,7 @@ on repeat visits. The road east over the bridge leads to **Riverside Mill**.
 **Ashdown Cottage** — Mira's family home, behind the door of the slate-roofed cottage. Walk into
 the door to go inside; walk onto the doormat to leave. It is a cutaway HD-2D room: a hearth with
 a live fire, a kitchen counter and shelf of jars, a bookcase, a quilted bed, a wardrobe, a
-candlelit dining table on a rug, flour sacks from the mill and a cat asleep by the fire. Three
+candlelit dining table on a rug, flour sacks from the mill and a cat asleep by the fire. Four
 spots can be **searched** for items (a sparkle marks the ones not yet searched):
 
 | Spot | Contents |
@@ -56,6 +103,7 @@ spots can be **searched** for items (a sparkle marks the ones not yet searched):
 | Kitchen Cupboard | Fresh Bread ×2, Wildflower Honey |
 | Old Chest (foot of the bed) | Lantern Oil, Healing Herb ×2, 30 gold — with a note from Mira's father |
 | Flour Sacks | Riverside Flour |
+| Bookshelf | Keeper's Journal Page (the story's clue) |
 
 ### The bag
 
@@ -194,12 +242,14 @@ tap, as browsers require.
 ```
 src/
   game/        input, settings, game state, developer state, sound, dialogue/interactions,
+               story (stages, objectives, endings), script (all conversations), battle,
                inventory & loot, scavenging, map, layout, scenes, interiors, collision
   gfx/         procedural pixel art (characters, props, surfaces, terrain), mesh builder,
                shader patches
   scene/       R3F components: game clock, camera, lighting, terrain, buildings, props, lamps,
                vegetation, characters, atmosphere, post-processing, performance, dev tools
-  ui/          HUD: dialogue box, prompt, banner, settings, stats, touch controls, bag & toasts,
+  ui/          HUD: dialogue box (choices), prompt, banner, objective tracker, intro & ending
+               cards, battle screen, settings, stats, touch controls, bag & toasts,
                developer panel, sprite debug view
 ```
 

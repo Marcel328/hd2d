@@ -151,6 +151,36 @@ function gold(b: PixelBuffer) {
     b.set(x, y, hex('#fff2b0'))
 }
 
+function journal(b: PixelBuffer) {
+  const paper = hex('#e9dcb8')
+  for (let y = 1; y < 15; y++) for (let x = 3; x < 13; x++) b.set(x, y, x === 12 || y === 14 ? ramp(paper, -1) : paper)
+  b.rect(3, 1, 10, 1, ramp(paper, 0.6))
+  for (const y of [3, 5, 7, 9, 11]) for (let x = 4 + (y % 4 === 1 ? 1 : 0); x < 11 - (y === 11 ? 3 : 0); x++) if ((x + y) % 5 !== 0) b.set(x, y, hex('#6a5a4a'))
+  b.set(10, 12, hex('#b0302a')) // a little heron mark in red ink
+  b.set(9, 11, hex('#b0302a'))
+}
+
+function scale(b: PixelBuffer) {
+  const c = hex('#7a5aa8')
+  for (let y = 2; y < 15; y++)
+    for (let x = 2; x < 14; x++) {
+      const dx = (x - 7.5) / 5.5
+      const dy = (y - 8) / 6.5
+      if (dx * dx + dy * dy > 1 || y < 2 + Math.abs(x - 7.5) * 0.6) continue
+      const band = (y + Math.abs(x - 7.5)) % 4 < 1
+      b.set(x, y, band ? ramp(c, 1.2) : x < 6 ? ramp(c, 0.5) : x > 10 ? ramp(c, -0.8) : c)
+    }
+  b.set(6, 5, hex('#d8c8ff'))
+}
+
+function wingdust(b: PixelBuffer) {
+  const glass = hex('#a8c8c8')
+  for (let y = 6; y < 15; y++) for (let x = 4; x < 12; x++) if (!((x === 4 || x === 11) && y === 14)) b.set(x, y, x === 4 ? ramp(glass, 0.6) : glass)
+  for (let y = 9; y < 14; y++) for (let x = 5; x < 11; x++) b.set(x, y, (x * 7 + y * 3) % 5 === 0 ? hex('#f6ffd0') : hex('#c8f07a'))
+  b.rect(6, 3, 4, 3, glass)
+  b.rect(6, 2, 4, 1, hex('#7a5232'))
+}
+
 function bag(b: PixelBuffer) {
   const leather = hex('#9a6234')
   for (let y = 5; y < 15; y++) for (let x = 2; x < 14; x++) if (!((x === 2 || x === 13) && y === 14)) b.set(x, y, x < 4 ? ramp(leather, 0.7) : x > 11 ? ramp(leather, -0.9) : leather)
@@ -161,6 +191,9 @@ function bag(b: PixelBuffer) {
 
 const PAINTERS: Record<ItemId | 'gold' | 'bag', (b: PixelBuffer) => void> = {
   bag,
+  journal,
+  scale,
+  wingdust,
   herb,
   rations,
   waterskin,

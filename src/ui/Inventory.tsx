@@ -176,7 +176,7 @@ function ToastItem({ toast }: { toast: Toast }) {
     <div className="toast">
       {toast.icon && <Icon id={toast.icon} size={32} />}
       <span>
-        <small>Obtained</small>
+        <small>{toast.label}</small>
         {toast.text}
       </span>
     </div>

@@ -4,6 +4,7 @@ import { Hud } from './ui/Hud'
 import { attachInput } from './game/input'
 import { activateScene, arrivalFor, SCENES, switchArea } from './game/world/scenes'
 import { COTTAGE_INFO } from './game/world/interiors'
+import { useStory } from './game/story'
 import { runtime, useGame } from './game/state'
 import { sound } from './game/audio'
 
@@ -16,6 +17,8 @@ export default function App() {
   const destination = useGame((s) => s.destination)
   useEffect(() => {
     if (!destination) return
+    // Leaving the mill after the Lantern is saved: Brann follows the player home.
+    if (useGame.getState().sceneId === 'riversidemill' && useStory.getState().ending) useStory.getState().sendBrannHome()
     const timer = setTimeout(() => {
       activateScene(destination)
       Object.assign(runtime.player, arrivalFor(destination), { moving: false })

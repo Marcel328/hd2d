@@ -170,6 +170,17 @@ export const COTTAGE_SPOTS: ScavengeSpot[] = [
     empty: 'The chest holds only folded blankets now.',
   },
   {
+    id: 'cottage-bookshelf',
+    name: 'Bookshelf',
+    ...w(8.95, 0.85),
+    reach: 1.3,
+    iconHeight: 2.75,
+    glint: { ...w(8.6, 0.65), y: 1.45 },
+    intro: 'Between an almanac and a book of river songs, a loose page sticks out — written in Brann’s hand.',
+    outro: '“A starving gloam will take oil freely given, and guard the flame that fed it. Drive one off by force and it takes the night’s small lights with it.”',
+    empty: 'Almanacs, river songs and a well-thumbed book of lantern lore.',
+  },
+  {
     id: 'cottage-sacks',
     name: 'Flour Sacks',
     ...w(9.45, 4.7),

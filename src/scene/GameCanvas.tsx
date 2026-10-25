@@ -4,9 +4,11 @@ import { Canvas } from '@react-three/fiber'
 import { useQuality, useSettings } from '../game/settings'
 import { runtime, useGame } from '../game/state'
 import { useDev } from '../game/dev'
-import { NPCS } from '../game/world/layout'
+import { BRANN_AT_HOME, BRANN_AT_MILL, NPCS } from '../game/world/layout'
+import { brannLocation, useStory } from '../game/story'
 import { interactables } from '../game/interactions'
 import { sound } from '../game/audio'
+import { getBody, placeBody } from '../game/world/collision'
 import { Lighting } from './Lighting'
 import { CameraRig } from './CameraRig'
 import { Ground, Water } from './Terrain'
@@ -30,6 +32,10 @@ export function GameCanvas() {
   const adaptive = useSettings((s) => s.adaptive)
   const sceneId = useGame((s) => s.sceneId)
   const ready = useGame((s) => s.ready)
+  // Brann is in exactly one place: the mill yard right after the Lantern is saved, then home.
+  const brannAt = useStory(brannLocation)
+  const brann =
+    brannAt === 'home' && sceneId === 'elmbrook' ? BRANN_AT_HOME : brannAt === 'mill' && sceneId === 'riversidemill' ? BRANN_AT_MILL : null
 
   return (
     <Canvas
@@ -40,7 +46,7 @@ export function GameCanvas() {
       camera={{ fov: 30, near: 1, far: 140, position: [12, 10, 34] }}
       frameloop={ready ? 'always' : 'never'}
       onCreated={({ gl, scene, camera }) => {
-        if (import.meta.env.DEV) Object.assign(window, { __hd2d: { gl, scene, camera, runtime, useGame, useSettings, useDev, interactables, sound } })
+        if (import.meta.env.DEV) Object.assign(window, { __hd2d: { gl, scene, camera, runtime, useGame, useSettings, useDev, interactables, sound, getBody, placeBody } })
       }}
     >
       <GameClock />
@@ -65,6 +71,7 @@ export function GameCanvas() {
           {NPCS.map((n) => (
             <Npc key={n.id} def={n} />
           ))}
+          {brann && <Npc key="brann" def={brann} />}
           <Atmosphere amount={quality.particles} shafts={quality.lightShafts} />
         </AreaGroup>
         {sceneId === 'elmbrook' && (

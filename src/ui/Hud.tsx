@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import { useGame, runtime } from '../game/state'
+import { useGame, runtime, lineText } from '../game/state'
 import { PRESETS, useSettings, useQuality, type QualityLevel, type Toggle } from '../game/settings'
 import { useDev } from '../game/dev'
 import { DevPanel } from './DevPanel'
 import { TouchControls } from './TouchControls'
 import { BagButton, InventoryPanel, Toasts } from './Inventory'
+import { BattleScreen } from './Battle'
+import { EndingCard, IntroCard, newGame, ObjectiveTracker } from './Story'
+import { useStory } from '../game/story'
 import { SCENES } from '../game/world/scenes'
 import { sound, VOICES } from '../game/audio'
 
@@ -14,7 +17,10 @@ export function DialogueBox() {
   const dialogue = useGame((s) => s.dialogue)
   const revealMore = useGame((s) => s.revealMore)
   const pressDialogue = useGame((s) => s.pressDialogue)
-  const line = dialogue ? dialogue.lines[dialogue.index] : ''
+  const pickChoice = useGame((s) => s.pickChoice)
+  const current = dialogue ? dialogue.lines[dialogue.index] : ''
+  const line = lineText(current)
+  const speaker = typeof current === 'string' ? (dialogue?.speaker ?? '') : current.speaker
   const done = !!dialogue && dialogue.revealed >= line.length
   const lineKey = dialogue ? `${dialogue.sourceId}:${dialogue.index}` : ''
 
@@ -32,7 +38,12 @@ export function DialogueBox() {
         carry -= n
         revealMore(n)
         const d = useGame.getState().dialogue
-        if (d && d.lines[d.index][d.revealed - 1] !== ' ') sound.blip(VOICES[d.sourceId] ?? 300)
+        if (d) {
+          const l = d.lines[d.index]
+          const who = typeof l === 'string' ? d.sourceId : l.speaker
+          // Narration ('' speaker) types silently.
+          if (who && lineText(l)[d.revealed - 1] !== ' ') sound.blip(VOICES[who] ?? VOICES[d.sourceId] ?? 300)
+        }
       }
       raf = requestAnimationFrame(tick)
     }
@@ -42,14 +53,34 @@ export function DialogueBox() {
 
   if (!dialogue) return null
   const isLast = dialogue.index === dialogue.lines.length - 1
+  const showChoices = isLast && done && !!dialogue.choices?.length
   return (
-    <div className="dialogue" role="dialog" aria-live="polite" onPointerDown={() => pressDialogue()}>
-      <div className="dialogue-name">{dialogue.speaker}</div>
-      <p className="dialogue-text">
+    <div className="dialogue" role="dialog" aria-live="polite" onPointerDown={() => !showChoices && pressDialogue()}>
+      {speaker && <div className="dialogue-name">{speaker}</div>}
+      <p className={speaker ? 'dialogue-text' : 'dialogue-text narration'}>
         {line.slice(0, dialogue.revealed)}
         <span className="dialogue-ghost">{line.slice(dialogue.revealed)}</span>
       </p>
-      {done && <div className={isLast ? 'dialogue-next end' : 'dialogue-next'} aria-hidden />}
+      {showChoices ? (
+        <ul className="dialogue-choices" role="listbox" aria-label="Choose">
+          {dialogue.choices!.map((c, i) => (
+            <li key={c.id} role="option" aria-selected={i === dialogue.choice} aria-disabled={c.disabled}>
+              <button
+                className={(i === dialogue.choice ? 'on' : '') + (c.disabled ? ' off' : '')}
+                disabled={c.disabled}
+                onPointerDown={(e) => {
+                  e.stopPropagation()
+                  pickChoice(i)
+                }}
+              >
+                {c.label}
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        done && <div className={isLast ? 'dialogue-next end' : 'dialogue-next'} aria-hidden />
+      )}
     </div>
   )
 }
@@ -62,7 +93,7 @@ export function InteractionPrompt() {
     <div className="prompt">
       <kbd>E</kbd>
       <span>
-        {prompt.kind === 'talk' ? 'Talk to' : prompt.kind === 'search' ? 'Search' : 'Read'} {prompt.name}
+        {prompt.verb ?? (prompt.kind === 'talk' ? 'Talk to' : prompt.kind === 'search' ? 'Search' : 'Read')} {prompt.name}
       </span>
     </div>
   )
@@ -87,7 +118,8 @@ export function LoadingScreen() {
 
 export function LocationBanner() {
   const banner = useGame((s) => s.banner)
-  const ready = useGame((s) => s.ready)
+  const intro = useStory((s) => s.stage === 'intro')
+  const ready = useGame((s) => s.ready) && !intro
   const [show, setShow] = useState(true)
   useEffect(() => {
     if (!ready) return
@@ -215,6 +247,24 @@ const TOGGLES: [Toggle, string][] = [
   ['lightShafts', 'Light shafts'],
 ]
 
+function NewGameButton({ onDone }: { onDone: () => void }) {
+  const [armed, setArmed] = useState(false)
+  return (
+    <button
+      className="dev-btn wide"
+      onClick={() => {
+        if (!armed) return setArmed(true)
+        setArmed(false)
+        onDone()
+        newGame()
+      }}
+      onBlur={() => setArmed(false)}
+    >
+      {armed ? 'Click again: lose progress and start over' : 'New game — The Last Lantern'}
+    </button>
+  )
+}
+
 export function SettingsPanel() {
   const open = useGame((s) => s.menuOpen)
   const setOpen = useGame((s) => s.setMenuOpen)
@@ -281,6 +331,10 @@ export function SettingsPanel() {
         </label>
       </section>
       <section>
+        <h3>Story</h3>
+        <NewGameButton onDone={() => setOpen(false)} />
+      </section>
+      <section>
         <button
           className="dev-btn wide"
           onClick={() => {
@@ -320,7 +374,10 @@ export function Hud() {
     <div className={touch ? 'hud touch-on' : 'hud'}>
       <LoadingScreen />
       <TopBar />
-      <FpsCounter />
+      <div className="hud-left">
+        <ObjectiveTracker />
+        <FpsCounter />
+      </div>
       <LocationBanner key={bannerSeq} />
       <AreaFade />
       <SceneTransition />
@@ -330,6 +387,9 @@ export function Hud() {
       <ControlsHint />
       <TouchControls />
       <InventoryPanel />
+      <BattleScreen />
+      <IntroCard />
+      <EndingCard />
       <SettingsPanel />
       <DevPanel />
     </div>

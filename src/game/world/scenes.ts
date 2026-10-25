@@ -50,6 +50,7 @@ const MILL_LAYOUT: typeof VILLAGE_LAYOUT = {
   fences: [[4, 12, 9, 12], [9, 12, 9, 18], [9, 18, 4, 18]],
   bridge: { x0: 19, x1: 21, z0: 7, z1: 9 },
   npcs: [],
+  beacon: { x: 14.6, z: 15.55 },
   trees: [
     { x: 6, z: 10.5, kind: 'oak', scale: 1.1, tint: 1 },
     { x: 11, z: 4, kind: 'birch', scale: 1, tint: 1 },

@@ -395,6 +395,81 @@ class SoundEngine {
     }
   }
 
+  private tone(type: OscillatorType, f0: number, f1: number, at: number, len: number, vol: number) {
+    const ctx = this.ctx!
+    const o = ctx.createOscillator()
+    const g = ctx.createGain()
+    o.type = type
+    o.frequency.setValueAtTime(f0, at)
+    o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), at + len)
+    g.gain.setValueAtTime(0.0001, at)
+    g.gain.linearRampToValueAtTime(vol, at + 0.01)
+    g.gain.exponentialRampToValueAtTime(0.001, at + len)
+    o.connect(g).connect(this.master)
+    o.start(at)
+    o.stop(at + len + 0.02)
+  }
+
+  private noiseBurst(at: number, len: number, vol: number, freq: number, type: BiquadFilterType = 'bandpass') {
+    const ctx = this.ctx!
+    const src = ctx.createBufferSource()
+    src.buffer = this.noise
+    const f = ctx.createBiquadFilter()
+    f.type = type
+    f.frequency.value = freq
+    const g = ctx.createGain()
+    g.gain.setValueAtTime(vol, at)
+    g.gain.exponentialRampToValueAtTime(0.001, at + len)
+    src.connect(f).connect(g).connect(this.master)
+    src.start(at, Math.random() * 1.5, len + 0.02)
+  }
+
+  private get ready() {
+    return !!this.ctx && this.ctx.state === 'running'
+  }
+
+  /** Battle start: a rising sweep and a low hit. */
+  encounter() {
+    if (!this.ready) return
+    const t = this.ctx!.currentTime
+    this.tone('sawtooth', 110, 880, t, 0.35, 0.05)
+    this.noiseBurst(t, 0.4, 0.08, 1200)
+    this.tone('triangle', 90, 45, t + 0.3, 0.4, 0.2)
+  }
+
+  hit(heavy: boolean) {
+    if (!this.ready) return
+    const t = this.ctx!.currentTime
+    this.noiseBurst(t, heavy ? 0.22 : 0.1, heavy ? 0.22 : 0.14, heavy ? 700 : 1600)
+    this.tone('square', heavy ? 160 : 260, 60, t, heavy ? 0.22 : 0.1, heavy ? 0.12 : 0.06)
+  }
+
+  guard() {
+    if (!this.ready) return
+    const t = this.ctx!.currentTime
+    this.tone('triangle', 520, 480, t, 0.12, 0.06)
+    this.noiseBurst(t, 0.06, 0.06, 3000, 'highpass')
+  }
+
+  breakShield() {
+    if (!this.ready) return
+    const t = this.ctx!.currentTime
+    this.noiseBurst(t, 0.35, 0.2, 4000, 'highpass')
+    for (const [i, f] of [1568, 1175, 1976].entries()) this.tone('triangle', f, f * 0.98, t + i * 0.05, 0.25, 0.05)
+  }
+
+  victory() {
+    if (!this.ready) return
+    const t = this.ctx!.currentTime
+    for (const [i, f] of [523, 659, 784, 1047, 784, 1047].entries()) this.tone('triangle', f, f, t + i * (i < 3 ? 0.11 : 0.16), 0.3, 0.06)
+  }
+
+  defeat() {
+    if (!this.ready) return
+    const t = this.ctx!.currentTime
+    for (const [i, f] of [392, 330, 262, 196].entries()) this.tone('triangle', f, f * 0.97, t + i * 0.22, 0.45, 0.05)
+  }
+
   /** Typewriter voice: a soft square blip, pitched per speaker. */
   blip(voice: number) {
     const ctx = this.ctx
@@ -440,4 +515,14 @@ class SoundEngine {
 export const sound = new SoundEngine()
 
 /** Voice pitch per dialogue source. */
-export const VOICES: Record<string, number> = { rowan: 165, mira: 520, signpost: 300, well: 300 }
+export const VOICES: Record<string, number> = {
+  rowan: 165,
+  'Elder Rowan': 165,
+  mira: 520,
+  Mira: 520,
+  brann: 135,
+  Brann: 135,
+  'Gloam Moth': 95,
+  signpost: 300,
+  well: 300,
+}

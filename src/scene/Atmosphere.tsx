@@ -10,6 +10,7 @@ import { sharedUniforms } from '../gfx/materialPatches'
 import { runtime } from '../game/state'
 import { sampleTimeOfDay } from './timeOfDay'
 import { roofGeometry } from './Buildings'
+import { LANTERN_LOOK, lanternMode } from '../game/story'
 
 type Mode = 0 | 1 | 2 // dust, firefly, smoke
 
@@ -19,6 +20,7 @@ uniform float uTime;
 uniform float uScale;
 uniform float uSize;
 uniform float uMode;
+uniform float uDensity;
 varying float vAlpha;
 void main() {
   vec3 p = position;
@@ -34,6 +36,8 @@ void main() {
     p.y += sin(t * 0.7 * (0.5 + aSeed.z) + aSeed.x * 6.283) * 0.35;
     p.z += cos(t * 0.38 * (0.6 + aSeed.y) + aSeed.z * 6.283) * 1.1;
     vAlpha = smoothstep(0.1, 1.0, sin(t * (1.2 + aSeed.y * 1.8) + aSeed.z * 30.0));
+    // Only a fraction of the swarm is out, depending on the story.
+    vAlpha *= step(aSeed.x, uDensity);
   } else {
     float life = fract(t * 0.11 + aSeed.x);
     p.y += life * 2.8;
@@ -85,6 +89,7 @@ function useParticles(mode: Mode, positions: number[], color: string, size: numb
         uMode: { value: mode },
         uColor: { value: new THREE.Color(color) },
         uIntensity: { value: 0 },
+        uDensity: { value: 1 },
       },
       transparent: true,
       depthWrite: false,
@@ -115,7 +120,8 @@ export function Atmosphere({ amount, shafts }: { amount: number; shafts: boolean
       if (t === 'forest' && rand() < 0.08) spots.push([tx + 0.5, tz + 0.5])
     })
     const out: number[] = []
-    const n = Math.round(110 * amount)
+    // Room for 2.2× the usual swarm: the firefly ending fills the night.
+    const n = Math.round(240 * amount)
     for (let i = 0; i < n; i++) {
       const [x, z] = spots[Math.floor(rand() * spots.length)]
       out.push(x + (rand() - 0.5) * 2, 0.35 + rand() * 1.4, z + (rand() - 0.5) * 2)
@@ -176,7 +182,9 @@ export function Atmosphere({ amount, shafts }: { amount: number; shafts: boolean
   useFrame(() => {
     const tod = sampleTimeOfDay(runtime.tod)
     dust.material.uniforms.uIntensity.value = tod.dust * 0.7
-    fireflies.material.uniforms.uIntensity.value = tod.fireflies
+    const look = LANTERN_LOOK[lanternMode()]
+    fireflies.material.uniforms.uIntensity.value = tod.fireflies * (look.fireflies > 0.9 ? 1.25 : 1)
+    fireflies.material.uniforms.uDensity.value = look.fireflies
     smoke.material.uniforms.uIntensity.value = 0.8
     smoke.material.uniforms.uColor.value.set(runtime.tod > 0.5 ? '#4a4e66' : '#c9c3bb')
     // Rays point along the sun direction and face the camera as much as possible.

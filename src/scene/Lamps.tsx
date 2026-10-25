@@ -11,6 +11,7 @@ import { getGlowTexture } from '../gfx/propSprites'
 import { occlusionPatch, patchMaterial } from '../gfx/materialPatches'
 import { runtime, useGame } from '../game/state'
 import { COTTAGE_LIGHTS } from '../game/world/interiors'
+import { gutter, LANTERN_LOOK, lanternMode } from '../game/story'
 import { sampleTimeOfDay } from './timeOfDay'
 
 const LAMP_COLOR = new THREE.Color('#ffb25e')
@@ -82,12 +83,19 @@ export function Lamps() {
     return { g, m }
   }, [])
 
+  const lampColor = useMemo(() => new THREE.Color(), [])
   useFrame(() => {
     const tod = sampleTimeOfDay(runtime.tod)
     const t = runtime.time
-    const flicker = 0.9 + 0.06 * Math.sin(t * 11) + 0.04 * Math.sin(t * 23.3)
-    glassMat.emissiveIntensity = tod.lampIntensity * 4 * flicker + 0.05
-    glow.m.opacity = Math.min(1, tod.lampIntensity * 1.1) * flicker
+    // The story decides how the lanterns burn: guttering, green-gold or blazing.
+    const look = LANTERN_LOOK[lanternMode()]
+    const flicker = (0.9 + 0.06 * Math.sin(t * 11) + 0.04 * Math.sin(t * 23.3)) * gutter(t, 0, look.sputter)
+    lampColor.set(look.color)
+    glassMat.emissive.copy(lampColor)
+    glassMat.emissiveIntensity = tod.lampIntensity * 4 * look.level * flicker + 0.05
+    glow.m.color.copy(lampColor)
+    glow.m.size = 2.2 * look.glow
+    glow.m.opacity = Math.min(1, tod.lampIntensity * 1.1 * Math.min(1, look.level + 0.2)) * flicker
   })
 
   return (
@@ -122,7 +130,7 @@ export function LightPool({ poolSize }: { poolSize: number }) {
   const lights = useRef<(THREE.PointLight | null)[]>(lightPool)
   const sets = useMemo(
     () => ({
-      outdoor: LIGHT_SOURCES.map<PoolSource>((l) => ({ ...l, color: LAMP_COLOR, flicker: 1 })),
+      outdoor: LIGHT_SOURCES.map<PoolSource>((l) => ({ ...l, color: LAMP_COLOR.clone(), flicker: 1 })),
       cottage: COTTAGE_LIGHTS.map<PoolSource>((l) => ({ ...l, color: new THREE.Color(l.color) })),
     }),
     [],
@@ -134,8 +142,10 @@ export function LightPool({ poolSize }: { poolSize: number }) {
     const area = useGame.getState().area
     const sources = area === 'cottage' ? sets.cottage : sets.outdoor
     const tod = sampleTimeOfDay(runtime.tod)
-    // Village lanterns follow the time of day; an indoor fire is always lit, cosier at night.
-    const level = area === 'outdoor' ? tod.lampIntensity : 0.75 + 0.35 * runtime.tod
+    // Village lanterns follow the time of day and the story; an indoor fire is always lit.
+    const look = LANTERN_LOOK[lanternMode()]
+    const outdoor = area === 'outdoor'
+    const level = outdoor ? tod.lampIntensity * look.level : 0.75 + 0.35 * runtime.tod
     const t = runtime.time
     const { x: px, z: pz } = runtime.player
     const n = Math.min(sources.length, MAX_SOURCES)
@@ -162,8 +172,10 @@ export function LightPool({ poolSize }: { poolSize: number }) {
       const wobble = 0.06 * Math.sin(t * 11 + si * 1.7) + 0.04 * Math.sin(t * 23.3 + si * 4.1)
       const fade = cutoff === Infinity ? 1 : THREE.MathUtils.smoothstep(cutoff - dist[si], 0, 2.5)
       light.position.set(src.x, src.y - 0.05, src.z + 0.05)
-      light.color.copy(src.color)
-      light.intensity = 9 * src.power * level * fade * (0.92 + wobble * src.flicker * 1.6)
+      if (outdoor) light.color.set(look.color)
+      else light.color.copy(src.color)
+      const sputter = outdoor ? gutter(t, si, look.sputter) : 1
+      light.intensity = 9 * src.power * level * fade * sputter * (0.92 + wobble * src.flicker * 1.6)
     }
   })
 

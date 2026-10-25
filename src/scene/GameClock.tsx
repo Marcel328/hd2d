@@ -7,6 +7,8 @@ import { runtime, useGame } from '../game/state'
 import { useDev } from '../game/dev'
 import { sharedUniforms } from '../gfx/materialPatches'
 import { sound } from '../game/audio'
+import { useBattle } from '../game/battle'
+import { useStory } from '../game/story'
 
 const MAX_DT = 1 / 20
 
@@ -14,6 +16,13 @@ export function GameClock() {
   useFrame((_, rawDt) => {
     const game = useGame.getState()
     if (consumePress('dev')) useDev.getState().toggle('open')
+    // Battles and story cards own the keyboard while they're up.
+    const story = useStory.getState()
+    if (useBattle.getState().active || story.stage === 'intro' || story.showEnding) {
+      consumePress('menu')
+      consumePress('inventory')
+      consumePress('toggleTime')
+    }
     if (consumePress('menu')) {
       if (game.inventoryOpen) game.setInventoryOpen(false)
       else game.setMenuOpen(!game.menuOpen)
