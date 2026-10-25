@@ -14,7 +14,11 @@ export function GameClock() {
   useFrame((_, rawDt) => {
     const game = useGame.getState()
     if (consumePress('dev')) useDev.getState().toggle('open')
-    if (consumePress('menu')) game.setMenuOpen(!game.menuOpen)
+    if (consumePress('menu')) {
+      if (game.inventoryOpen) game.setInventoryOpen(false)
+      else game.setMenuOpen(!game.menuOpen)
+    }
+    if (consumePress('inventory') && !game.dialogue && !game.areaTarget) game.setInventoryOpen(!game.inventoryOpen)
     if (consumePress('toggleTime') && !game.dialogue) game.toggleNight()
     if (consumePress('mute')) sound.setMuted(!sound.muted)
 

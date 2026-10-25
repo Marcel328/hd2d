@@ -12,7 +12,8 @@ import { CameraRig } from './CameraRig'
 import { Ground, Water } from './Terrain'
 import { Buildings } from './Buildings'
 import { Bridge, Crates, Fence, Well } from './Props'
-import { Lamps } from './Lamps'
+import { LightPool, Lamps } from './Lamps'
+import { AreaGroup, Interior } from './Interior'
 import { Foliage, Trees } from './Vegetation'
 import { InteractionMarker, Npc, Player } from './Characters'
 import { Atmosphere } from './Atmosphere'
@@ -44,24 +45,35 @@ export function GameCanvas() {
     >
       <GameClock />
       <Suspense key={sceneId} fallback={null}>
+        {/* Shared by every area of the scene: lights, camera, player, effects. */}
         <Lighting quality={quality} />
+        <LightPool poolSize={quality.lightPool} />
         <CameraRig />
-        <Ground anisotropy={quality.anisotropy} />
-        <Water />
-        <Buildings />
-        {sceneId === 'elmbrook' ? <Well /> : <RiversideMill />}
-        <Fence />
-        <Bridge />
-        <Crates />
-        <Lamps poolSize={quality.lightPool} />
-        <Trees />
-        <Foliage density={quality.foliage} />
+        {/* The village stays mounted (and in GPU memory) while the player is indoors — it is
+            only hidden, so walking back out is instant. */}
+        <AreaGroup area="outdoor">
+          <Ground anisotropy={quality.anisotropy} />
+          <Water />
+          <Buildings />
+          {sceneId === 'elmbrook' ? <Well /> : <RiversideMill />}
+          <Fence />
+          <Bridge />
+          <Crates />
+          <Lamps />
+          <Trees />
+          <Foliage density={quality.foliage} />
+          {NPCS.map((n) => (
+            <Npc key={n.id} def={n} />
+          ))}
+          <Atmosphere amount={quality.particles} shafts={quality.lightShafts} />
+        </AreaGroup>
+        {sceneId === 'elmbrook' && (
+          <AreaGroup area="cottage">
+            <Interior />
+          </AreaGroup>
+        )}
         <Player />
-        {NPCS.map((n) => (
-          <Npc key={n.id} def={n} />
-        ))}
         <InteractionMarker />
-        <Atmosphere amount={quality.particles} shafts={quality.lightShafts} />
         <Effects quality={quality} />
         <DevTools />
         <AudioDirector />

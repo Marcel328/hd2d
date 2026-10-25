@@ -2,6 +2,7 @@
 // characters. Movement is sub-stepped so nothing tunnels through thin fences.
 import { MAP_H, MAP_W, isBlockingTerrain, terrainAt } from './map'
 import { BUSHES, FENCE_SEGMENTS, HOUSES, LAMP_POSTS, PROPS, SIGNPOST, WELL, type TreeDef } from './layout'
+import type { AreaId } from './interiors'
 
 export interface Box {
   x0: number
@@ -17,26 +18,61 @@ export interface Body {
   r: number
 }
 
-const boxes: Box[] = []
-const grid: number[][] = Array.from({ length: MAP_W * MAP_H }, () => [])
-const bodies = new Map<string, Body>()
+/**
+ * One collision space: static boxes bucketed into a unit grid over its bounds, plus live bodies.
+ * The village and each interior get their own world, built once; switching areas only changes
+ * which world is active, so nothing is rebuilt when the player walks through a door.
+ */
+class World {
+  readonly boxes: Box[] = []
+  readonly bodies = new Map<string, Body>()
+  private readonly grid: number[][]
+  constructor(
+    readonly x0: number,
+    readonly z0: number,
+    readonly w: number,
+    readonly h: number,
+  ) {
+    this.grid = Array.from({ length: w * h }, () => [])
+  }
+
+  clear() {
+    this.boxes.length = 0
+    for (const cell of this.grid) cell.length = 0
+    this.bodies.clear()
+  }
+
+  add(b: Box) {
+    const i = this.boxes.push(b) - 1
+    const m = 0.5 // max body radius
+    for (let z = Math.max(0, Math.floor(b.z0 - m - this.z0)); z <= Math.min(this.h - 1, Math.floor(b.z1 + m - this.z0)); z++)
+      for (let x = Math.max(0, Math.floor(b.x0 - m - this.x0)); x <= Math.min(this.w - 1, Math.floor(b.x1 + m - this.x0)); x++)
+        this.grid[z * this.w + x].push(i)
+  }
+
+  cell(x: number, z: number): number[] | undefined {
+    const cx = Math.floor(x - this.x0)
+    const cz = Math.floor(z - this.z0)
+    if (cx < 0 || cz < 0 || cx >= this.w || cz >= this.h) return undefined
+    return this.grid[cz * this.w + cx]
+  }
+}
+
+const outdoor = new World(0, 0, MAP_W, MAP_H)
+const worlds = new Map<AreaId, World>([['outdoor', outdoor]])
+let world = outdoor
 
 function addBox(b: Box) {
-  const i = boxes.push(b) - 1
-  const m = 0.5 // max body radius
-  for (let tz = Math.max(0, Math.floor(b.z0 - m)); tz <= Math.min(MAP_H - 1, Math.floor(b.z1 + m)); tz++)
-    for (let tx = Math.max(0, Math.floor(b.x0 - m)); tx <= Math.min(MAP_W - 1, Math.floor(b.x1 + m)); tx++)
-      grid[tz * MAP_W + tx].push(i)
+  outdoor.add(b)
 }
 
 function addSegment(x0: number, z0: number, x1: number, z1: number, t: number) {
   addBox({ x0: Math.min(x0, x1) - t, z0: Math.min(z0, z1) - t, x1: Math.max(x0, x1) + t, z1: Math.max(z0, z1) + t })
 }
 
+/** (Re)build the village collision world for the current map and layout. */
 export function buildCollision(villageTrees: TreeDef[]) {
-  boxes.length = 0
-  for (const cell of grid) cell.length = 0
-  bodies.clear()
+  outdoor.clear()
   // Terrain: merge horizontal runs of blocking tiles into single boxes.
   for (let tz = 0; tz < MAP_H; tz++) {
     let start = -1
@@ -65,21 +101,40 @@ export function buildCollision(villageTrees: TreeDef[]) {
   for (const [x0, z0, x1, z1] of FENCE_SEGMENTS) addSegment(x0, z0, x1, z1, 0.08)
 }
 
+/** Build an interior's collision world from its wall and furniture boxes. */
+export function buildAreaCollision(area: AreaId, bounds: { x0: number; z0: number; x1: number; z1: number }, list: Box[]) {
+  const w = new World(Math.floor(bounds.x0), Math.floor(bounds.z0), Math.ceil(bounds.x1 - bounds.x0) + 1, Math.ceil(bounds.z1 - bounds.z0) + 1)
+  for (const b of list) w.add(b)
+  worlds.set(area, w)
+}
+
+/** Make another area's world active, carrying the player's body across. */
+export function setCollisionArea(area: AreaId) {
+  const next = worlds.get(area)
+  if (!next || next === world) return
+  const player = world.bodies.get('player')
+  if (player) {
+    world.bodies.delete('player')
+    next.bodies.set('player', player)
+  }
+  world = next
+}
+
 export function registerBody(b: Body) {
-  bodies.set(b.id, b)
+  world.bodies.set(b.id, b)
 }
 
 export function unregisterBody(b: Body) {
-  if (bodies.get(b.id) === b) bodies.delete(b.id)
+  for (const w of worlds.values()) if (w.bodies.get(b.id) === b) w.bodies.delete(b.id)
 }
 
 export function getBody(id: string): Body | undefined {
-  return bodies.get(id)
+  return world.bodies.get(id)
 }
 
-/** Debug views: static boxes and live bodies. */
+/** Debug views: static boxes and live bodies of the active area. */
 export function getColliders(): { boxes: readonly Box[]; bodies: Iterable<Body> } {
-  return { boxes, bodies: bodies.values() }
+  return { boxes: world.boxes, bodies: world.bodies.values() }
 }
 
 /** Put a body somewhere (e.g. a debug teleport), then push it out of anything it overlaps. */
@@ -116,11 +171,12 @@ function pushOutOfBox(p: { x: number; z: number }, r: number, b: Box) {
 }
 
 function resolve(p: { x: number; z: number }, r: number, selfId: string) {
-  p.x = Math.max(r, Math.min(MAP_W - r, p.x))
-  p.z = Math.max(r, Math.min(MAP_H - r, p.z))
-  const cell = grid[Math.floor(p.z) * MAP_W + Math.floor(p.x)]
-  if (cell) for (const i of cell) pushOutOfBox(p, r, boxes[i])
-  for (const b of bodies.values()) {
+  const w = world
+  p.x = Math.max(w.x0 + r, Math.min(w.x0 + w.w - r, p.x))
+  p.z = Math.max(w.z0 + r, Math.min(w.z0 + w.h - r, p.z))
+  const cell = w.cell(p.x, p.z)
+  if (cell) for (const i of cell) pushOutOfBox(p, r, w.boxes[i])
+  for (const b of w.bodies.values()) {
     if (b.id === selfId) continue
     const dx = p.x - b.x
     const dz = p.z - b.z

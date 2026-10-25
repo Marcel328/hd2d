@@ -9,7 +9,8 @@ import { MeshBuilder } from '../gfx/meshBuilder'
 import { getSurfaces, TEX_WORLD } from '../gfx/surfaceTextures'
 import { getGlowTexture } from '../gfx/propSprites'
 import { occlusionPatch, patchMaterial } from '../gfx/materialPatches'
-import { runtime } from '../game/state'
+import { runtime, useGame } from '../game/state'
+import { COTTAGE_LIGHTS } from '../game/world/interiors'
 import { sampleTimeOfDay } from './timeOfDay'
 
 const LAMP_COLOR = new THREE.Color('#ffb25e')
@@ -48,7 +49,8 @@ function buildLampGeometry() {
   return { iron: iron.build(), stone: stone.build(), glass: glass.build() }
 }
 
-export function Lamps({ poolSize }: { poolSize: number }) {
+/** Street lamps and door lanterns (village only). Their light comes from LightPool. */
+export function Lamps() {
   const geo = useMemo(buildLampGeometry, [])
   const s = getSurfaces()
   const ironMat = useMemo(
@@ -80,35 +82,12 @@ export function Lamps({ poolSize }: { poolSize: number }) {
     return { g, m }
   }, [])
 
-  const lights = useRef<(THREE.PointLight | null)[]>(lightPool)
-  const order = useMemo(() => LIGHT_SOURCES.map((_, i) => i), [])
-  const dist = useMemo(() => new Float32Array(LIGHT_SOURCES.length), [])
-
   useFrame(() => {
     const tod = sampleTimeOfDay(runtime.tod)
     const t = runtime.time
-    const flicker = (i: number) => 0.9 + 0.06 * Math.sin(t * 11 + i * 1.7) + 0.04 * Math.sin(t * 23.3 + i * 4.1)
-    glassMat.emissiveIntensity = tod.lampIntensity * 4 * flicker(0) + 0.05
-    glow.m.opacity = Math.min(1, tod.lampIntensity * 1.1) * flicker(3)
-
-    // Hand the pool to the nearest lanterns; fade by distance to the first one left out.
-    const { x: px, z: pz } = runtime.player
-    LIGHT_SOURCES.forEach((l, i) => (dist[i] = Math.hypot(l.x - px, l.z - pz)))
-    order.sort((a, b) => dist[a] - dist[b])
-    const cutoff = order.length > poolSize ? dist[order[poolSize]] : Infinity
-    for (let k = 0; k < poolSize; k++) {
-      const light = lights.current[k]
-      if (!light) continue
-      const si = order[k]
-      if (si === undefined) {
-        light.intensity = 0
-        continue
-      }
-      const src = LIGHT_SOURCES[si]
-      const fade = cutoff === Infinity ? 1 : THREE.MathUtils.smoothstep(cutoff - dist[si], 0, 2.5)
-      light.position.set(src.x, src.y - 0.05, src.z + 0.05)
-      light.intensity = 9 * src.power * tod.lampIntensity * fade * flicker(si)
-    }
+    const flicker = 0.9 + 0.06 * Math.sin(t * 11) + 0.04 * Math.sin(t * 23.3)
+    glassMat.emissiveIntensity = tod.lampIntensity * 4 * flicker + 0.05
+    glow.m.opacity = Math.min(1, tod.lampIntensity * 1.1) * flicker
   })
 
   return (
@@ -117,6 +96,79 @@ export function Lamps({ poolSize }: { poolSize: number }) {
       <mesh geometry={geo.stone} material={stoneMat} castShadow receiveShadow />
       <mesh geometry={geo.glass} material={glassMat} />
       <points geometry={glow.g} material={glow.m} renderOrder={5} />
+    </group>
+  )
+}
+
+interface PoolSource {
+  x: number
+  y: number
+  z: number
+  power: number
+  color: THREE.Color
+  /** 0..1 how strongly it flickers (fire flickers more than a lantern). */
+  flicker: number
+}
+
+const MAX_SOURCES = 32
+
+/**
+ * A fixed pool of point lights shared by every light source in the active area. Each frame the
+ * pool goes to the sources nearest the player, fading out before being reassigned. Because the
+ * number of lights never changes — not even when walking indoors, where the hearth and candles
+ * borrow the same pool — no material ever has to be recompiled.
+ */
+export function LightPool({ poolSize }: { poolSize: number }) {
+  const lights = useRef<(THREE.PointLight | null)[]>(lightPool)
+  const sets = useMemo(
+    () => ({
+      outdoor: LIGHT_SOURCES.map<PoolSource>((l) => ({ ...l, color: LAMP_COLOR, flicker: 1 })),
+      cottage: COTTAGE_LIGHTS.map<PoolSource>((l) => ({ ...l, color: new THREE.Color(l.color) })),
+    }),
+    [],
+  )
+  const order = useMemo(() => Array.from({ length: MAX_SOURCES }, (_, i) => i), [])
+  const dist = useMemo(() => new Float32Array(MAX_SOURCES), [])
+
+  useFrame(() => {
+    const area = useGame.getState().area
+    const sources = area === 'cottage' ? sets.cottage : sets.outdoor
+    const tod = sampleTimeOfDay(runtime.tod)
+    // Village lanterns follow the time of day; an indoor fire is always lit, cosier at night.
+    const level = area === 'outdoor' ? tod.lampIntensity : 0.75 + 0.35 * runtime.tod
+    const t = runtime.time
+    const { x: px, z: pz } = runtime.player
+    const n = Math.min(sources.length, MAX_SOURCES)
+    // Insertion sort by distance into `order` (tiny n, no per-frame allocation).
+    for (let i = 0; i < n; i++) {
+      dist[i] = Math.hypot(sources[i].x - px, sources[i].z - pz)
+      let j = i
+      while (j > 0 && dist[order[j - 1]] > dist[i]) {
+        order[j] = order[j - 1]
+        j--
+      }
+      order[j] = i
+    }
+    const cutoff = n > poolSize ? dist[order[poolSize]] : Infinity
+    for (let k = 0; k < poolSize; k++) {
+      const light = lights.current[k]
+      if (!light) continue
+      const si = k < n ? order[k] : undefined
+      if (si === undefined) {
+        light.intensity = 0
+        continue
+      }
+      const src = sources[si]
+      const wobble = 0.06 * Math.sin(t * 11 + si * 1.7) + 0.04 * Math.sin(t * 23.3 + si * 4.1)
+      const fade = cutoff === Infinity ? 1 : THREE.MathUtils.smoothstep(cutoff - dist[si], 0, 2.5)
+      light.position.set(src.x, src.y - 0.05, src.z + 0.05)
+      light.color.copy(src.color)
+      light.intensity = 9 * src.power * level * fade * (0.92 + wobble * src.flicker * 1.6)
+    }
+  })
+
+  return (
+    <>
       {Array.from({ length: poolSize }, (_, i) => (
         <pointLight
           key={i}
@@ -129,6 +181,6 @@ export function Lamps({ poolSize }: { poolSize: number }) {
           decay={1.7}
         />
       ))}
-    </group>
+    </>
   )
 }

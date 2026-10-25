@@ -1,9 +1,17 @@
 import { setMap, VILLAGE_MAP } from './map'
 import { setLayout, VILLAGE_LAYOUT, buildTrees, type Dir } from './layout'
 import { terrainAt } from './map'
-import { buildCollision } from './collision'
+import { buildAreaCollision, buildCollision, getBody, placeBody, setCollisionArea } from './collision'
 import { rebuildWaterDistance } from '../audio'
-import { buildInteractables } from '../interactions'
+import { buildInteractables, setInteractionArea } from '../interactions'
+import { runtime } from '../state'
+import {
+  COTTAGE_BOUNDS,
+  COTTAGE_ENTRY_SPOT,
+  COTTAGE_EXIT_SPOT,
+  cottageColliders,
+  type AreaId,
+} from './interiors'
 
 export type SceneId = 'elmbrook' | 'riversidemill'
 
@@ -49,7 +57,12 @@ const MILL_LAYOUT: typeof VILLAGE_LAYOUT = {
   ],
 }
 
+// Interiors are static: build their collision once, up front.
+buildAreaCollision('cottage', COTTAGE_BOUNDS, cottageColliders())
+
 export function activateScene(id: SceneId) {
+  setCollisionArea('outdoor')
+  setInteractionArea('outdoor')
   setMap(id === 'elmbrook' ? VILLAGE_MAP : MILL_MAP)
   setLayout(id === 'elmbrook' ? VILLAGE_LAYOUT : MILL_LAYOUT)
   buildCollision(buildTrees().filter((t) => terrainAt(Math.floor(t.x), Math.floor(t.z)) !== 'forest'))
@@ -67,4 +80,21 @@ export function exitAt(id: SceneId, x: number, z: number, dx: number): SceneId |
   if (id === 'elmbrook' && x > 23.1 && dx > 0) return 'riversidemill'
   if (id === 'riversidemill' && x < 0.9 && dx < 0) return 'elmbrook'
   return null
+}
+
+/**
+ * Move the player between the village and an interior of the loaded scene. Nothing is loaded or
+ * rebuilt: the active collision world and interaction set are swapped and the player is placed
+ * at the other side of the door. Rendering swaps by visibility (see AreaGroup).
+ */
+export function switchArea(to: AreaId) {
+  setCollisionArea(to)
+  setInteractionArea(to)
+  const spot = to === 'cottage' ? COTTAGE_ENTRY_SPOT : COTTAGE_EXIT_SPOT
+  const body = getBody('player')
+  if (body) placeBody(body, spot.x, spot.z)
+  Object.assign(runtime.player, { x: body?.x ?? spot.x, z: body?.z ?? spot.z, facing: spot.facing, moving: false })
+  runtime.forceFacing = spot.facing
+  runtime.focusId = null
+  runtime.cameraCut = true
 }

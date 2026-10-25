@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { Dir } from './world/layout'
 import type { SceneId } from './world/scenes'
+import type { AreaId } from './world/interiors'
 import { PLAYER_SPAWN } from './world/layout'
 
 /** Per-frame mutable state that must not trigger React renders. */
@@ -23,6 +24,10 @@ export const runtime = {
   triangles: 0,
   /** Smoothed GPU time per frame (ms), when timer queries are available. */
   gpuMs: 0,
+  /** Set when the player is teleported (doors); the camera snaps instead of gliding. */
+  cameraCut: false,
+  /** Facing to apply to the player on the next frame (after a door). */
+  forceFacing: null as Dir | null,
   /** Resolution multiplier chosen by the adaptive-resolution controller. */
   dprScale: 1,
 }
@@ -36,8 +41,15 @@ export interface DialogueState {
 }
 
 export interface Prompt {
-  kind: 'talk' | 'read'
+  kind: 'talk' | 'read' | 'search'
   name: string
+}
+
+export interface Banner {
+  title: string
+  subtitle: string
+  /** Bumped to replay the banner animation. */
+  seq: number
 }
 
 interface GameState {
@@ -45,6 +57,16 @@ interface GameState {
   destination: SceneId | null
   travel: (id: SceneId) => void
   enterScene: (id: SceneId) => void
+  /** Which part of the loaded scene the player is in (the village itself, or an interior). */
+  area: AreaId
+  /** Set while fading out toward another area; the swap happens behind the fade. */
+  areaTarget: AreaId | null
+  goToArea: (area: AreaId) => void
+  arriveArea: (area: AreaId) => void
+  banner: Banner
+  showBanner: (title: string, subtitle: string) => void
+  inventoryOpen: boolean
+  setInventoryOpen: (v: boolean) => void
   night: boolean
   toggleNight: () => void
   dialogue: DialogueState | null
@@ -71,7 +93,19 @@ export const useGame = create<GameState>((set, get) => ({
     if (get().destination || !get().ready || destination === get().sceneId) return
     set({ destination, dialogue: null, prompt: null, menuOpen: false })
   },
-  enterScene: (sceneId) => set({ sceneId, destination: null, ready: false }),
+  enterScene: (sceneId) => set({ sceneId, destination: null, ready: false, area: 'outdoor', areaTarget: null }),
+  area: 'outdoor',
+  areaTarget: null,
+  goToArea: (areaTarget) => {
+    const s = get()
+    if (s.areaTarget || s.destination || !s.ready || areaTarget === s.area) return
+    set({ areaTarget, dialogue: null, prompt: null, menuOpen: false, inventoryOpen: false })
+  },
+  arriveArea: (area) => set({ area, areaTarget: null }),
+  banner: { title: 'Elmbrook', subtitle: 'A village at the edge of the Whisperwood', seq: 0 },
+  showBanner: (title, subtitle) => set((s) => ({ banner: { title, subtitle, seq: s.banner.seq + 1 } })),
+  inventoryOpen: false,
+  setInventoryOpen: (inventoryOpen) => set({ inventoryOpen, menuOpen: inventoryOpen ? false : get().menuOpen }),
   night: false,
   toggleNight: () => set((s) => ({ night: !s.night })),
   dialogue: null,

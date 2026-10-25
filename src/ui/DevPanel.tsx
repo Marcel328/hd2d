@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useDev, type DevState } from '../game/dev'
+import { useInventory } from '../game/inventory'
 import { runtime, useGame } from '../game/state'
 import { getBody, placeBody } from '../game/world/collision'
 import { PLAYER_SPAWN } from '../game/world/layout'
@@ -46,9 +47,20 @@ function Check({ k, label, hint }: { k: ToggleKey; label: string; hint?: string 
 export function DevPanel() {
   const dev = useDev()
   const sceneId = useGame((s) => s.sceneId)
-  const teleports: [string, number, number][] = sceneId === 'elmbrook'
-    ? [...TELEPORTS, ['East exit', 22.7, 8]]
-    : [['West exit', 2.8, 8], ['Mill', 15.5, 14.4], ['Storehouse', 6, 6.7], ['Bridge', 20, 8]]
+  const area = useGame((s) => s.area)
+  const teleports: [string, number, number][] =
+    area === 'cottage'
+      ? [
+          ['Doorway', 105, 106.2],
+          ['Hearth', 102.3, 101.9],
+          ['Cupboard', 104.5, 101.3],
+          ['Chest', 101.7, 106.3],
+          ['Sacks', 108.6, 104.7],
+          ['Table', 105.2, 105.0],
+        ]
+      : sceneId === 'elmbrook'
+        ? [...TELEPORTS, ['East exit', 22.7, 8], ['Cottage door', 15.5, 6.3]]
+        : [['West exit', 2.8, 8], ['Mill', 15.5, 14.4], ['Storehouse', 6, 6.7], ['Bridge', 20, 8]]
   const [, tick] = useState(0)
   useEffect(() => {
     if (!dev.open) return
@@ -133,8 +145,25 @@ export function DevPanel() {
             </button>
           ))}
         </div>
+        {sceneId === 'elmbrook' && (
+          <button
+            className="dev-btn wide"
+            onClick={() => useGame.getState().goToArea(area === 'outdoor' ? 'cottage' : 'outdoor')}
+          >
+            {area === 'outdoor' ? 'Enter Ashdown Cottage' : 'Leave the cottage'}
+          </button>
+        )}
         <button className="dev-btn wide" onClick={() => useGame.setState({ visits: {} })}>
           Reset dialogue memory
+        </button>
+        <button
+          className="dev-btn wide"
+          onClick={() => {
+            useInventory.getState().reset()
+            useGame.setState({ visits: {} })
+          }}
+        >
+          Reset save (bag &amp; searched spots)
         </button>
       </section>
 

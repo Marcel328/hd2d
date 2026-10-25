@@ -12,6 +12,49 @@ const SHADOW_EXTENT = 15
 /** The sun, for debug views (shadow frustum helper). */
 export const sunLight: { current: THREE.DirectionalLight | null } = { current: null }
 
+/**
+ * Interior lighting: the "sun" becomes a soft key light falling in through the open front of the
+ * cutaway room, the sky term turns warm, and the world beyond the walls is a dark backdrop.
+ * Only colours and intensities change, so no shader is recompiled when walking indoors.
+ */
+const INTERIOR_DAY = {
+  sunColor: new THREE.Color('#ffe2bd'),
+  sunIntensity: 1.3,
+  sunDir: new THREE.Vector3(0.3, 1, 0.7).normalize(),
+  skyColor: new THREE.Color('#f2dcc0'),
+  groundColor: new THREE.Color('#4a3424'),
+  hemiIntensity: 0.62,
+}
+const INTERIOR_NIGHT = {
+  // Faint, only slightly cool moonlight: the fire and candles should dominate.
+  sunColor: new THREE.Color('#9d9cc4'),
+  sunIntensity: 0.22,
+  skyColor: new THREE.Color('#3e3442'),
+  groundColor: new THREE.Color('#140e0c'),
+  hemiIntensity: 0.2,
+}
+const interior = {
+  sunColor: new THREE.Color(),
+  sunIntensity: 0,
+  sunDir: INTERIOR_DAY.sunDir,
+  skyColor: new THREE.Color(),
+  groundColor: new THREE.Color(),
+  hemiIntensity: 0,
+  fogColor: new THREE.Color('#0e0b0a'),
+  fogNear: 45,
+  fogFar: 95,
+}
+
+function sampleInterior(t: number) {
+  const s = t * t * (3 - 2 * t)
+  interior.sunColor.copy(INTERIOR_DAY.sunColor).lerp(INTERIOR_NIGHT.sunColor, s)
+  interior.skyColor.copy(INTERIOR_DAY.skyColor).lerp(INTERIOR_NIGHT.skyColor, s)
+  interior.groundColor.copy(INTERIOR_DAY.groundColor).lerp(INTERIOR_NIGHT.groundColor, s)
+  interior.sunIntensity = INTERIOR_DAY.sunIntensity + (INTERIOR_NIGHT.sunIntensity - INTERIOR_DAY.sunIntensity) * s
+  interior.hemiIntensity = INTERIOR_DAY.hemiIntensity + (INTERIOR_NIGHT.hemiIntensity - INTERIOR_DAY.hemiIntensity) * s
+  return interior
+}
+
 export function Lighting({ quality }: { quality: QualityConfig }) {
   const sun = useRef<THREE.DirectionalLight>(null!)
   const hemi = useRef<THREE.HemisphereLight>(null!)
@@ -55,7 +98,7 @@ export function Lighting({ quality }: { quality: QualityConfig }) {
       runtime.tod += THREE.MathUtils.clamp(target - runtime.tod, -step, step)
     }
 
-    const tod = sampleTimeOfDay(runtime.tod)
+    const tod = game.area === 'outdoor' ? sampleTimeOfDay(runtime.tod) : sampleInterior(runtime.tod)
     const light = sun.current
     light.color.copy(tod.sunColor)
     light.intensity = tod.sunIntensity

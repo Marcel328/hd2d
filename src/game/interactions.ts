@@ -1,9 +1,12 @@
 // Things the player can talk to or read, and what they say.
 import { SIGNPOST, WELL } from './world/layout'
+import type { AreaId } from './world/interiors'
 
 export interface Interactable {
   id: string
-  kind: 'talk' | 'read'
+  kind: 'talk' | 'read' | 'search'
+  /** Which area it belongs to; only the active area's interactables can be focused. */
+  area?: AreaId
   name: string
   /** Live position — NPCs update theirs every frame. */
   pos: { x: number; z: number }
@@ -15,6 +18,17 @@ export interface Interactable {
 }
 
 export const interactables = new Map<string, Interactable>()
+
+let activeArea: AreaId = 'outdoor'
+
+export function setInteractionArea(area: AreaId) {
+  activeArea = area
+}
+
+/** Interactables of the area the player is in. */
+export function* areaInteractables(): Generator<Interactable> {
+  for (const it of interactables.values()) if ((it.area ?? 'outdoor') === activeArea) yield it
+}
 
 export function registerInteractable(i: Interactable) {
   interactables.set(i.id, i)
@@ -55,7 +69,10 @@ const DIALOGUE: Record<string, Interactable['lines']> = {
         'Oh! Hello! Are you here for the harvest festival? You are a little early — the cabbages are not even ready yet.',
         'I am Mira. I look after the garden while Father works the mill across the river.',
       ]
-    return ['Follow the road east over the bridge and you will reach the old mill. Tell Father I said hello!']
+    return [
+      'Follow the road east over the bridge and you will reach the old mill. Tell Father I said hello!',
+      'Oh, and if you are short on supplies, our cottage is the one with the slate roof. Father leaves a chest out for travellers — help yourself!',
+    ]
   },
   signpost: () => [
     '↑  North — Whisperwood\n      (the trail is overgrown)\n→  East — Riverside Mill\n↓  South — The Highroad to Port Calder',
@@ -94,7 +111,7 @@ export function npcLines(id: string): Interactable['lines'] {
 export function findFocus(px: number, pz: number, fx: number, fz: number): Interactable | null {
   let best: Interactable | null = null
   let bestScore = Infinity
-  for (const it of interactables.values()) {
+  for (const it of areaInteractables()) {
     const dx = it.pos.x - px
     const dz = it.pos.z - pz
     const d = Math.hypot(dx, dz)

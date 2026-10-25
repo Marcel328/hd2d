@@ -25,24 +25,75 @@ npm run preview    # serve the production bundle
 | --- | --- |
 | WASD / arrow keys | Walk (four-directional facing) |
 | Shift | Run |
-| E / Space / Enter | Talk, read, advance dialogue |
+| E / Space / Enter | Talk, read, search, advance dialogue |
 | N | Toggle day / night |
+| I or B | Open / close the bag |
 | M | Mute / unmute sound |
 | Mouse wheel | Zoom |
-| Esc | Graphics settings |
+| Esc | Graphics settings (or close the bag) |
 | ` (backquote) or F2 | Developer tools |
 
-On phones and tablets an analog stick, a **Talk/Read** button and a hold-to-**Run** button appear
+On phones and tablets an analog stick, a **Talk/Read/Search** button and a hold-to-**Run** button appear
 automatically (toggle under Settings → *On-screen touch controls*). Tap the dialogue box to
 advance it.
 
-## What's in the scene
+## What's in the scenes
 
-A 24 × 24-unit village clearing: three timber-framed houses, a cobbled plaza with a well, a
-fenced garden, a creek with an arched bridge, street lamps and a forest border.
+**Elmbrook** — a 24 × 24-unit village clearing: three timber-framed houses, a cobbled plaza with
+a well, a fenced garden, a creek with an arched bridge, street lamps and a forest border.
 You can talk to **Elder Rowan** (stationary, by the well) and **Mira** (walks a patrol route
 around the garden), and read the **signpost** and the **old well**. NPC lines change at night and
-on repeat visits.
+on repeat visits. The road east over the bridge leads to **Riverside Mill**.
+
+**Ashdown Cottage** — Mira's family home, behind the door of the slate-roofed cottage. Walk into
+the door to go inside; walk onto the doormat to leave. It is a cutaway HD-2D room: a hearth with
+a live fire, a kitchen counter and shelf of jars, a bookcase, a quilted bed, a wardrobe, a
+candlelit dining table on a rug, flour sacks from the mill and a cat asleep by the fire. Three
+spots can be **searched** for items (a sparkle marks the ones not yet searched):
+
+| Spot | Contents |
+| --- | --- |
+| Kitchen Cupboard | Fresh Bread ×2, Wildflower Honey |
+| Old Chest (foot of the bed) | Lantern Oil, Healing Herb ×2, 30 gold — with a note from Mira's father |
+| Flour Sacks | Riverside Flour |
+
+### The bag
+
+Press <kbd>I</kbd> (or the **Bag** button) for the inventory: a 5-column grid with category tabs
+(All · Supplies · Materials · Key items), a detail pane, gold, **NEW** badges on items you haven't
+looked at yet, and **Use** for consumables. New items also pop up as toasts. The bag and the list
+of searched spots are saved in `localStorage` (developer tools → *Reset save* starts over).
+
+The traveller arrives with:
+
+| Item | Qty | Kind |
+| --- | --- | --- |
+| Healing Herb | 3 | Supplies (usable) |
+| Trail Rations | 2 | Supplies (usable) |
+| Waterskin | 1 | Key item |
+| Brass Compass | 1 | Key item |
+| Sealed Letter (to Elder Rowan) | 1 | Key item |
+| Gold | 85 | — |
+
+### Interiors without reloading
+
+The cottage is a third scene, but it is not loaded the way Riverside Mill is. It lives in the same
+three.js scene as the village, 100 units away, and both stay resident:
+
+- **Rendering:** the village and the cottage sit in `AreaGroup`s whose `visible` flag is flipped
+  imperatively (no React re-render). A hidden subtree costs nothing to draw and keeps its geometry,
+  textures and programs on the GPU, so going back outside is instant.
+- **No shader recompiles:** lights stay outside both groups. The point-light pool is shared — in the
+  village it serves the lamps, indoors the hearth, candle and sconce — and the sun becomes an
+  indoor key light, so the light count and shader variants never change. The hidden interior is
+  compiled up front by the same `compileAsync` preloader. Measured: 51 shader programs before
+  entering, inside, and after leaving again.
+- **World state:** collision is split into per-area worlds (`setCollisionArea`), and interactables
+  are tagged by area, so nothing is rebuilt on a door; the cottage's collision world is built once
+  at startup. Village NPCs pause their AI while you're indoors.
+- **Cost of a door:** the swap itself measured 0.3 ms; the player sees a ~0.5 s fade. For
+  comparison, travelling to Riverside Mill, which remounts the whole scene, took about 650 ms
+  end to end.
 
 ## How it is built (by phase)
 
@@ -114,13 +165,16 @@ Press <kbd>`</kbd> (or <kbd>F2</kbd>, or Settings → *Developer tools*) to open
 | Wireframe | All geometry as wireframe, including every sprite quad. |
 | Post-processing | Switches bloom, depth of field and grading off to show the raw render. |
 | Time of day | A slider for scrubbing any moment between noon and night. |
-| Teleport / reset | Jump to landmarks; reset NPC dialogue memory. |
+| Teleport / reset | Jump to landmarks (per area), enter or leave the cottage, reset NPC dialogue memory, reset the save. |
 
 Closing the panel restores normal play. Everything is driven by one simulation clock
 (`src/scene/GameClock.tsx`): animation code reads `runtime.dt` / `runtime.time` instead of the
 render loop's delta, which is what makes freezing and stepping exact.
 
 ## Sound
+
+Indoors, outside sounds pass through a low-pass filter and a crackling hearth takes over;
+doors creak and pickups chime.
 
 `src/game/audio.ts` builds the soundscape from oscillators and filtered noise: wind in the trees,
 a creek that gets louder and pans as you approach it, birdsong by day, crickets and owls at night,
@@ -139,13 +193,13 @@ tap, as browsers require.
 
 ```
 src/
-  game/        input, settings, game state, developer state, sound, dialogue/interactions, map,
-               layout, collision
+  game/        input, settings, game state, developer state, sound, dialogue/interactions,
+               inventory & loot, scavenging, map, layout, scenes, interiors, collision
   gfx/         procedural pixel art (characters, props, surfaces, terrain), mesh builder,
                shader patches
   scene/       R3F components: game clock, camera, lighting, terrain, buildings, props, lamps,
                vegetation, characters, atmosphere, post-processing, performance, dev tools
-  ui/          HUD: dialogue box, prompt, banner, settings, stats, touch controls,
+  ui/          HUD: dialogue box, prompt, banner, settings, stats, touch controls, bag & toasts,
                developer panel, sprite debug view
 ```
 

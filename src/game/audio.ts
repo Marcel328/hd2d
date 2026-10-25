@@ -3,7 +3,7 @@
 // depend on the surface underfoot; dialogue text "speaks" in short blips.
 import { MAP_H, MAP_W, terrainAtWorld, forEachTile } from './world/map'
 
-type Surface = 'grass' | 'dirt' | 'stone' | 'wood'
+export type Surface = 'grass' | 'dirt' | 'stone' | 'wood'
 
 const MUTE_KEY = 'hd2d-village-muted'
 
@@ -42,6 +42,12 @@ class SoundEngine {
   private creek!: GainNode
   private creekPan!: StereoPannerNode
   private crickets!: GainNode
+  /** Everything heard from outside; muffled by a low-pass filter while indoors. */
+  private outdoorBus!: GainNode
+  private outdoorFilter!: BiquadFilterNode
+  private hearth!: GainNode
+  private indoor = false
+  private nextCrackle = 0
   private nextBird = 0
   private nextOwl = 0
   private lastBlip = 0
@@ -82,6 +88,10 @@ class SoundEngine {
     this.master = ctx.createGain()
     this.master.gain.value = this.muted ? 0 : 0.7
     this.master.connect(ctx.destination)
+    this.outdoorFilter = ctx.createBiquadFilter()
+    this.outdoorFilter.type = 'lowpass'
+    this.outdoorBus = ctx.createGain()
+    this.outdoorBus.connect(this.outdoorFilter).connect(this.master)
 
     // Two seconds of white noise, reused by every noisy source.
     this.noise = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate)
@@ -94,7 +104,7 @@ class SoundEngine {
     const windFilter = ctx.createBiquadFilter()
     windFilter.type = 'lowpass'
     windFilter.frequency.value = 480
-    this.loopNoise().connect(windFilter).connect(this.wind).connect(this.master)
+    this.loopNoise().connect(windFilter).connect(this.wind).connect(this.outdoorBus)
     const swell = ctx.createOscillator()
     const swellDepth = ctx.createGain()
     swell.frequency.value = 0.09
@@ -114,12 +124,12 @@ class SoundEngine {
     creekHigh.type = 'peaking'
     creekHigh.frequency.value = 3200
     creekHigh.gain.value = 6
-    this.loopNoise().connect(creekBand).connect(creekHigh).connect(this.creekPan).connect(this.creek).connect(this.master)
+    this.loopNoise().connect(creekBand).connect(creekHigh).connect(this.creekPan).connect(this.creek).connect(this.outdoorBus)
 
     // Crickets: a high tone chopped by a fast pulse and gated into bursts, two voices.
     this.crickets = ctx.createGain()
     this.crickets.gain.value = 0
-    this.crickets.connect(this.master)
+    this.crickets.connect(this.outdoorBus)
     for (const [freq, rate, burst, pan] of [
       [4400, 29, 1.7, -0.6],
       [4750, 33, 1.3, 0.55],
@@ -152,6 +162,14 @@ class SoundEngine {
       pulse.start()
       lfo.start()
     }
+    // Hearth: a low rumble of filtered noise plus random crackles (see update).
+    this.hearth = ctx.createGain()
+    this.hearth.gain.value = 0
+    const hearthTone = ctx.createBiquadFilter()
+    hearthTone.type = 'lowpass'
+    hearthTone.frequency.value = 380
+    this.loopNoise().connect(hearthTone).connect(this.hearth).connect(this.master)
+    this.applyIndoor()
   }
 
   private loopNoise() {
@@ -163,11 +181,36 @@ class SoundEngine {
     return src
   }
 
+  /** Indoors: outside sounds are muffled and the hearth takes over. */
+  setIndoor(indoor: boolean) {
+    this.indoor = indoor
+    this.applyIndoor()
+  }
+
+  private applyIndoor() {
+    const ctx = this.ctx
+    if (!ctx || !this.outdoorBus) return
+    const now = ctx.currentTime
+    this.outdoorBus.gain.setTargetAtTime(this.indoor ? 0.3 : 1, now, 0.15)
+    this.outdoorFilter.frequency.setTargetAtTime(this.indoor ? 600 : 18000, now, 0.15)
+    this.hearth.gain.setTargetAtTime(this.indoor ? 0.07 : 0, now, 0.3)
+  }
+
   /** Called every frame with the world state. */
   update(tod: number, px: number, pz: number) {
     const ctx = this.ctx
     if (!ctx || ctx.state !== 'running') return
     const now = ctx.currentTime
+    if (this.indoor) {
+      if (now > this.nextCrackle) {
+        this.nextCrackle = now + 0.05 + Math.random() * 0.35
+        this.crackle()
+      }
+      this.creek.gain.setTargetAtTime(0, now, 0.3)
+      this.wind.gain.setTargetAtTime(0.05, now, 0.5)
+      this.crickets.gain.setTargetAtTime(Math.max(0, tod - 0.35) * 1.5, now, 0.6)
+      return
+    }
     const day = 1 - tod
     this.wind.gain.setTargetAtTime(0.05 + 0.05 * day, now, 0.5)
     this.crickets.gain.setTargetAtTime(Math.max(0, tod - 0.35) * 1.5, now, 0.6)
@@ -196,7 +239,7 @@ class SoundEngine {
     pan.pan.value = Math.random() * 1.6 - 0.8
     const out = ctx.createGain()
     out.gain.value = 0.035 + Math.random() * 0.03
-    pan.connect(out).connect(this.master)
+    pan.connect(out).connect(this.outdoorBus)
     const base = 2400 + Math.random() * 1800
     const notes = 2 + Math.floor(Math.random() * 4)
     let t = t0
@@ -221,7 +264,7 @@ class SoundEngine {
     const ctx = this.ctx!
     const pan = ctx.createStereoPanner()
     pan.pan.value = Math.random() < 0.5 ? -0.7 : 0.7
-    pan.connect(this.master)
+    pan.connect(this.outdoorBus)
     let t = ctx.currentTime + 0.05
     for (const [f, len] of [
       [392, 0.32],
@@ -242,11 +285,12 @@ class SoundEngine {
   }
 
   /** Short filtered-noise footstep; the filter and a little body tone depend on the surface. */
-  footstep(x: number, z: number, onBridge: boolean, running: boolean) {
+  footstep(x: number, z: number, onBridge: boolean, running: boolean, floor?: Surface) {
     const ctx = this.ctx
     if (!ctx || ctx.state !== 'running') return
     const t = terrainAtWorld(x, z)
-    const surface: Surface = onBridge ? 'wood' : t === 'cobble' ? 'stone' : t === 'path' || t === 'soil' ? 'dirt' : 'grass'
+    const surface: Surface =
+      floor ?? (onBridge ? 'wood' : t === 'cobble' ? 'stone' : t === 'path' || t === 'soil' ? 'dirt' : 'grass')
     const now = ctx.currentTime
     const src = ctx.createBufferSource()
     src.buffer = this.noise
@@ -271,6 +315,83 @@ class SoundEngine {
       o.connect(og).connect(this.master)
       o.start(now)
       o.stop(now + 0.08)
+    }
+  }
+
+  private crackle() {
+    const ctx = this.ctx!
+    const now = ctx.currentTime
+    const src = ctx.createBufferSource()
+    src.buffer = this.noise
+    const hp = ctx.createBiquadFilter()
+    hp.type = 'highpass'
+    hp.frequency.value = 1500 + Math.random() * 2500
+    const g = ctx.createGain()
+    const len = 0.01 + Math.random() * 0.03
+    g.gain.setValueAtTime(0.03 + Math.random() * 0.06, now)
+    g.gain.exponentialRampToValueAtTime(0.001, now + len)
+    const pan = ctx.createStereoPanner()
+    pan.pan.value = -0.35 + Math.random() * 0.2 // the hearth is on the west side of the room
+    src.connect(hp).connect(g).connect(pan).connect(this.master)
+    src.start(now, Math.random() * 1.9, len + 0.01)
+  }
+
+  /** Wooden door: a latch click, a short creak and a soft thud. */
+  door() {
+    const ctx = this.ctx
+    if (!ctx || ctx.state !== 'running') return
+    const now = ctx.currentTime
+    const creak = ctx.createOscillator()
+    const cg = ctx.createGain()
+    const vib = ctx.createOscillator()
+    const vibDepth = ctx.createGain()
+    creak.type = 'sawtooth'
+    creak.frequency.setValueAtTime(240, now + 0.03)
+    creak.frequency.linearRampToValueAtTime(170, now + 0.32)
+    vib.frequency.value = 38
+    vibDepth.gain.value = 18
+    vib.connect(vibDepth).connect(creak.frequency)
+    const bp = ctx.createBiquadFilter()
+    bp.type = 'bandpass'
+    bp.frequency.value = 900
+    bp.Q.value = 3
+    cg.gain.setValueAtTime(0, now + 0.03)
+    cg.gain.linearRampToValueAtTime(0.035, now + 0.08)
+    cg.gain.linearRampToValueAtTime(0, now + 0.32)
+    creak.connect(bp).connect(cg).connect(this.master)
+    creak.start(now + 0.03)
+    creak.stop(now + 0.34)
+    vib.start(now + 0.03)
+    vib.stop(now + 0.34)
+    const thud = ctx.createOscillator()
+    const tg = ctx.createGain()
+    thud.frequency.setValueAtTime(120, now + 0.3)
+    thud.frequency.exponentialRampToValueAtTime(55, now + 0.42)
+    tg.gain.setValueAtTime(0.0001, now)
+    tg.gain.setValueAtTime(0.16, now + 0.3)
+    tg.gain.exponentialRampToValueAtTime(0.001, now + 0.45)
+    thud.connect(tg).connect(this.master)
+    thud.start(now + 0.3)
+    thud.stop(now + 0.46)
+  }
+
+  /** Bright little arpeggio when something goes into the bag. */
+  pickup() {
+    const ctx = this.ctx
+    if (!ctx || ctx.state !== 'running') return
+    let t = ctx.currentTime + 0.02
+    for (const f of [784, 988, 1175, 1568]) {
+      const o = ctx.createOscillator()
+      const g = ctx.createGain()
+      o.type = 'triangle'
+      o.frequency.value = f
+      g.gain.setValueAtTime(0, t)
+      g.gain.linearRampToValueAtTime(0.05, t + 0.008)
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.22)
+      o.connect(g).connect(this.master)
+      o.start(t)
+      o.stop(t + 0.24)
+      t += 0.06
     }
   }
 

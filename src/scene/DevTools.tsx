@@ -7,7 +7,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { useDev } from '../game/dev'
 import { runtime } from '../game/state'
 import { getBody, getColliders, placeBody } from '../game/world/collision'
-import { interactables } from '../game/interactions'
+import { areaInteractables } from '../game/interactions'
 import { LIGHT_SOURCES } from '../game/world/layout'
 import { sharedUniforms } from '../gfx/materialPatches'
 import { lightPool } from './Lamps'
@@ -121,7 +121,7 @@ function Colliders() {
       n++
     }
     for (const b of getColliders().bodies) ring(b.x, b.z, b.r, BODY)
-    for (const it of interactables.values()) ring(it.pos.x, it.pos.z, it.reach, it.id === runtime.focusId ? FOCUS : REACH)
+    for (const it of areaInteractables()) ring(it.pos.x, it.pos.z, it.reach, it.id === runtime.focusId ? FOCUS : REACH)
     rings.geometry.setDrawRange(0, n * RING_SEGMENTS * 2)
     pos.needsUpdate = true
     col.needsUpdate = true

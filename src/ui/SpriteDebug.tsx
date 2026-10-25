@@ -5,6 +5,10 @@ import { getSpriteAtlas } from '../gfx/propSprites'
 import { getSurfaces } from '../gfx/surfaceTextures'
 import { buildGroundTexture } from '../gfx/terrainTexture'
 import type * as THREE from 'three'
+import { itemIconUrl } from '../gfx/itemIcons'
+import { ITEMS } from '../game/inventory'
+import { getFlameTexture } from '../gfx/propSprites'
+import { getInteriorSurfaces } from '../gfx/surfaceTextures'
 
 function Img({ tex, label, scale = 4 }: { tex: THREE.Texture; label: string; scale?: number }) {
   const src = useMemo(() => (tex.image as HTMLCanvasElement).toDataURL(), [tex])
@@ -36,6 +40,18 @@ export default function SpriteDebug() {
       <Img tex={s.roof.red} label="roof red" />
       <Img tex={s.roof.slate} label="roof slate" />
       <Img tex={s.roof.moss} label="roof moss" />
+      {(['floor', 'quilt', 'books', 'rug'] as const).map((k) => (
+        <Img key={k} tex={getInteriorSurfaces()[k]} label={k} />
+      ))}
+      <Img tex={getFlameTexture()} label="hearth flames" scale={6} />
+      <figure style={{ margin: 0 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, maxWidth: 420 }}>
+          {[...Object.keys(ITEMS), 'gold', 'bag'].map((id) => (
+            <img key={id} src={itemIconUrl(id as keyof typeof ITEMS)} width={64} height={64} style={{ imageRendering: 'pixelated', background: '#2a2430' }} alt={id} title={id} />
+          ))}
+        </div>
+        <figcaption style={{ fontSize: 12, opacity: 0.7 }}>item icons</figcaption>
+      </figure>
       <Img tex={ground} label="ground" scale={1} />
     </div>
   )

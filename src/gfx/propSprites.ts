@@ -286,6 +286,195 @@ function readIcon(): PixelBuffer {
   return b
 }
 
+
+function searchIcon(): PixelBuffer {
+  const b = new PixelBuffer(14, 12)
+  const white = hex('#fbf6e9')
+  for (let y = 0; y < 8; y++)
+    for (let x = 0; x < 14; x++) if (!((x === 0 || x === 13) && (y === 0 || y === 7))) b.set(x, y, white)
+  b.set(4, 8, white)
+  b.set(5, 8, white)
+  b.set(4, 9, white)
+  // Magnifying glass: brass ring, pale lens, handle.
+  const ring = hex('#b07a2a')
+  for (const [x, y] of [[5, 1], [6, 1], [7, 1], [4, 2], [8, 2], [4, 3], [8, 3], [4, 4], [8, 4], [5, 5], [6, 5], [7, 5]]) b.set(x, y, ring)
+  for (const [x, y] of [[5, 2], [6, 2], [7, 2], [5, 3], [6, 3], [7, 3], [5, 4], [6, 4], [7, 4]]) b.set(x, y, hex('#bfe3f2'))
+  b.set(5, 2, hex('#ffffff'))
+  b.set(9, 6, hex('#5a3a22'))
+  b.set(10, 6, hex('#5a3a22'))
+  b.outline(hex('#2a1c24'))
+  return b
+}
+
+function sparkle(): PixelBuffer {
+  const b = new PixelBuffer(9, 9)
+  const gold = hex('#ffe9a0')
+  for (let i = 0; i < 9; i++) {
+    const c = Math.abs(i - 4) <= 1 ? hex('#ffffff') : gold
+    if (Math.abs(i - 4) <= 3) {
+      b.set(4, i, c)
+      b.set(i, 4, c)
+    }
+  }
+  b.set(3, 3, gold)
+  b.set(5, 3, gold)
+  b.set(3, 5, gold)
+  b.set(5, 5, gold)
+  return b
+}
+
+function jars(): PixelBuffer {
+  const b = new PixelBuffer(16, 10)
+  const fills = ['#d9902a', '#6f8f3a', '#a8343a'].map(hex)
+  fills.forEach((f, i) => {
+    const x0 = i * 5 + 1
+    const h = 6 + (i % 2)
+    for (let y = 10 - h; y < 10; y++)
+      for (let x = x0; x < x0 + 4; x++) b.set(x, y, x === x0 ? ramp(f, 0.8) : x === x0 + 3 ? ramp(f, -0.8) : f)
+    b.rect(x0, 10 - h - 1, 4, 1, hex('#efe2c4')) // cloth lid
+    b.set(x0 + 1, 10 - h + 1, hex('#ffffff'))
+  })
+  b.outline(hex('#2a1a12'))
+  return b
+}
+
+function bread(): PixelBuffer {
+  const b = new PixelBuffer(12, 7)
+  const crust = hex('#c08a3e')
+  for (let y = 1; y < 5; y++) for (let x = 1 + (y === 1 ? 1 : 0); x < 11 - (y === 1 ? 1 : 0); x++) b.set(x, y, y === 1 ? ramp(crust, 0.8) : y === 4 ? ramp(crust, -0.8) : crust)
+  for (const x of [3, 6, 9]) b.set(x, 2, hex('#f0d39a'))
+  b.rect(0, 5, 12, 2, hex('#7a5232')) // board
+  b.outline(hex('#2a1a12'))
+  return b
+}
+
+function pot(): PixelBuffer {
+  const b = new PixelBuffer(10, 9)
+  const iron = hex('#3d3a40')
+  for (let y = 3; y < 9; y++) for (let x = 1; x < 9; x++) if (!(y === 8 && (x === 1 || x === 8))) b.set(x, y, x < 3 ? ramp(iron, 0.9) : x > 6 ? ramp(iron, -0.6) : iron)
+  b.rect(0, 3, 10, 1, ramp(iron, 0.6))
+  b.rect(2, 2, 6, 1, ramp(iron, 0.3))
+  b.rect(4, 1, 2, 1, ramp(iron, 1))
+  b.outline(hex('#16141a'))
+  return b
+}
+
+function bowl(): PixelBuffer {
+  const b = new PixelBuffer(10, 7)
+  for (const [x, y, c] of [[2, 1, '#d23a3a'], [3, 1, '#d23a3a'], [5, 1, '#e0b040'], [6, 0, '#e0b040'], [6, 1, '#d6a030'], [4, 2, '#c43030'], [7, 2, '#d23a3a']] as [number, number, string][])
+    b.set(x, y, hex(c))
+  const wood = hex('#8a5a34')
+  for (let y = 2; y < 6; y++) for (let x = 1 + (y - 2); x < 9 - (y - 2); x++) if (y > 2 || x < 4 || x > 7) b.set(x, y, y === 2 ? ramp(wood, 0.8) : wood)
+  b.outline(hex('#2a1a12'))
+  return b
+}
+
+function candle(): PixelBuffer {
+  const b = new PixelBuffer(5, 11)
+  b.set(2, 0, hex('#fff6c0'))
+  b.set(2, 1, hex('#ffb040'))
+  b.rect(1, 3, 3, 6, hex('#efe6d0'))
+  b.rect(3, 3, 1, 6, hex('#cbbf9f'))
+  b.rect(0, 9, 5, 2, hex('#a07a3a'))
+  b.set(2, 2, hex('#3a2a20'))
+  return b
+}
+
+function logs(): PixelBuffer {
+  const b = new PixelBuffer(16, 9)
+  const ends: [number, number][] = [[3, 6], [8, 6], [13, 6], [5, 2], [10, 2]]
+  for (const [cx, cy] of ends)
+    for (let y = -2; y <= 2; y++)
+      for (let x = -2; x <= 2; x++) {
+        if (x * x + y * y > 5) continue
+        const r = Math.hypot(x, y)
+        b.set(cx + x, cy + y, r < 1 ? hex('#d9b07a') : r < 2 ? hex('#b8874a') : hex('#6a4426'))
+      }
+  b.outline(hex('#22150c'))
+  return b
+}
+
+function sacks(): PixelBuffer {
+  const b = new PixelBuffer(22, 16)
+  const cloth = hex('#e3d6b6')
+  const sack = (x0: number, w: number, h: number) => {
+    for (let y = 16 - h; y < 16; y++) {
+      const k = (y - (16 - h)) / h
+      const half = Math.round((w / 2) * Math.min(1, 0.55 + k * 1.2))
+      for (let x = x0 + Math.floor(w / 2) - half; x < x0 + Math.floor(w / 2) + half; x++) {
+        const u = (x - x0) / w
+        b.set(x, y, u < 0.3 ? ramp(cloth, 0.6) : u > 0.75 ? ramp(cloth, -1) : cloth)
+      }
+    }
+    b.rect(x0 + Math.floor(w / 2) - 2, 16 - h + 2, 4, 1, hex('#8a6a3a')) // tie
+  }
+  sack(0, 12, 15)
+  sack(10, 12, 12)
+  b.rect(4, 9, 3, 2, hex('#8a6a3a')) // mill mark
+  b.outline(hex('#3a2c1c'))
+  return b
+}
+
+function keg(): PixelBuffer {
+  const b = new PixelBuffer(12, 12)
+  const wood = hex('#7d5030')
+  for (let y = 0; y < 12; y++) {
+    const bulge = y > 2 && y < 9 ? 0 : 1
+    for (let x = bulge; x < 12 - bulge; x++) {
+      let c = x < 3 ? ramp(wood, 0.7) : x > 8 ? ramp(wood, -1) : wood
+      if (y === 2 || y === 9) c = hex('#3c3a3c')
+      if (x % 3 === 0 && y !== 2 && y !== 9) c = ramp(c, -0.8)
+      b.set(x, y, c)
+    }
+  }
+  b.set(6, 6, hex('#b8874a')) // tap
+  b.outline(hex('#22150c'))
+  return b
+}
+
+function pottedPlant(): PixelBuffer {
+  const b = new PixelBuffer(14, 20)
+  const blobs: Blob[] = [
+    { x: 7, y: 7, r: 5, z: 0 },
+    { x: 4, y: 6, r: 3.2, z: 1 },
+    { x: 10, y: 6.5, r: 3.2, z: 1 },
+    { x: 7, y: 3, r: 3, z: 2 },
+  ]
+  paintFoliage(b, blobs, ['#1f4a26', '#2e6a33', '#46883e', '#6fae52'].map(hex), 19)
+  const clay = hex('#b0603a')
+  for (let y = 12; y < 20; y++) {
+    const inset = y < 14 ? 0 : Math.floor((y - 14) / 3) + 1
+    for (let x = 2 + inset; x < 12 - inset; x++) b.set(x, y, y < 14 ? ramp(clay, 0.6) : x < 5 ? ramp(clay, 0.4) : x > 9 ? ramp(clay, -0.8) : clay)
+  }
+  b.outline(OUTLINE)
+  return b
+}
+
+function cat(): PixelBuffer {
+  const b = new PixelBuffer(16, 10)
+  const fur = hex('#d9893a')
+  // Curled body
+  for (let y = 3; y < 10; y++)
+    for (let x = 1; x < 13; x++) {
+      const dx = (x - 7) / 6
+      const dy = (y - 7) / 3.6
+      if (dx * dx + dy * dy <= 1) b.set(x, y, (x + y) % 3 === 0 ? ramp(fur, -0.8) : y < 5 ? ramp(fur, 0.6) : fur)
+    }
+  // Head with ears, eyes closed
+  for (let y = 2; y < 8; y++) for (let x = 10; x < 15; x++) if ((x - 12.5) ** 2 / 6 + (y - 5) ** 2 / 7 <= 1) b.set(x, y, fur)
+  b.set(10, 2, fur)
+  b.set(14, 2, fur)
+  b.set(10, 1, ramp(fur, -0.6))
+  b.set(14, 1, ramp(fur, -0.6))
+  b.set(11, 5, hex('#3a2418'))
+  b.set(13, 5, hex('#3a2418'))
+  b.set(12, 6, hex('#e8a0a0'))
+  // Tail wrapping round the front
+  for (let x = 2; x < 9; x++) b.set(x, 9, ramp(fur, x % 2 ? -0.4 : 0.2))
+  b.outline(hex('#2a1a12'))
+  return b
+}
+
 export interface AtlasRect {
   /** uv offset and scale for the sprite inside the atlas */
   u: number
@@ -314,6 +503,18 @@ export type SpriteName =
   | 'signpost'
   | 'talk'
   | 'read'
+  | 'search'
+  | 'sparkle'
+  | 'jars'
+  | 'bread'
+  | 'pot'
+  | 'bowl'
+  | 'candle'
+  | 'logs'
+  | 'sacks'
+  | 'barrel'
+  | 'plant'
+  | 'cat'
 
 export interface SpriteAtlas {
   texture: THREE.CanvasTexture
@@ -344,6 +545,18 @@ export function getSpriteAtlas(): SpriteAtlas {
     ['signpost', signpost()],
     ['talk', talkIcon()],
     ['read', readIcon()],
+    ['search', searchIcon()],
+    ['sparkle', sparkle()],
+    ['jars', jars()],
+    ['bread', bread()],
+    ['pot', pot()],
+    ['bowl', bowl()],
+    ['candle', candle()],
+    ['logs', logs()],
+    ['sacks', sacks()],
+    ['barrel', keg()],
+    ['plant', pottedPlant()],
+    ['cat', cat()],
   ]
 
   // Simple shelf packer with a 1px gutter (2px around big sprites to avoid bleeding).
@@ -444,4 +657,45 @@ export function getBlobShadowTexture() {
     ctx.fillRect(0, 0, 32, 32)
   })
   return blobShadowTex
+}
+
+/** Hearth fire: three 12×16 flame frames side by side, flipped through like a sprite sheet. */
+let flameTex: THREE.CanvasTexture | null = null
+export function getFlameTexture(): THREE.CanvasTexture {
+  if (flameTex) return flameTex
+  const W = 12
+  const H = 16
+  const sheet = new PixelBuffer(W * 3, H)
+  const cols = ['#fff7c8', '#ffd25a', '#ff9a2a', '#e0502a', '#a8302a'].map(hex)
+  for (let f = 0; f < 3; f++) {
+    const rand = mulberry32(400 + f)
+    const tongues = [
+      { x: 6 + (rand() - 0.5) * 2, h: 14 - f, w: 4.2 },
+      { x: 3 + rand(), h: 9 + rand() * 3, w: 2.6 },
+      { x: 9 - rand(), h: 9 + rand() * 3, w: 2.6 },
+    ]
+    for (let y = 0; y < H; y++)
+      for (let x = 0; x < W; x++) {
+        let heat = 0
+        for (const t of tongues) {
+          const top = H - t.h
+          if (y < top) continue
+          const k = (y - top) / t.h // 0 at the tip, 1 at the base
+          const half = t.w * Math.sqrt(k)
+          const d = Math.abs(x + 0.5 - t.x) / Math.max(0.01, half)
+          if (d < 1) heat = Math.max(heat, (1 - d) * (0.45 + k * 0.7))
+        }
+        heat += (hash2(x, y, 410 + f) - 0.5) * 0.18
+        if (heat <= 0.12) continue
+        const idx = heat > 0.8 ? 0 : heat > 0.6 ? 1 : heat > 0.4 ? 2 : heat > 0.25 ? 3 : 4
+        sheet.set(f * W + x, y, cols[idx])
+      }
+  }
+  flameTex = new THREE.CanvasTexture(sheet.toCanvas())
+  flameTex.colorSpace = THREE.SRGBColorSpace
+  flameTex.magFilter = THREE.NearestFilter
+  flameTex.minFilter = THREE.NearestFilter
+  flameTex.generateMipmaps = false
+  flameTex.repeat.set(1 / 3, 1)
+  return flameTex
 }

@@ -11,6 +11,7 @@ import { findFocus, interactables, npcLines, registerInteractable, unregisterInt
 import { runtime, useGame } from '../game/state'
 import type { Dir, NpcDef } from '../game/world/layout'
 import { exitAt } from '../game/world/scenes'
+import { enteringCottage, leavingCottage } from '../game/world/interiors'
 import { groundHeight } from './Props'
 import { sound } from '../game/audio'
 import { BRIDGE } from '../game/world/layout'
@@ -111,7 +112,11 @@ export function Player() {
     if (dt === 0) return // frozen
     const game = useGame.getState()
 
-    if (game.destination || !game.ready) {
+    if (runtime.forceFacing) {
+      state.facing = runtime.forceFacing
+      runtime.forceFacing = null
+    }
+    if (game.destination || !game.ready || game.areaTarget) {
       state.moving = false
       runtime.player.moving = false
       return
@@ -132,7 +137,8 @@ export function Player() {
       iz = virtualPad.y
       throttle = Math.min(1, (stick - 0.2) / 0.6 + 0.35)
     }
-    if (game.menuOpen) ix = iz = 0
+    const uiOpen = game.menuOpen || game.inventoryOpen
+    if (uiOpen) ix = iz = 0
 
     if (ix || iz) {
       // Four-way facing: the most recently pressed direction wins while it is held.
@@ -150,7 +156,7 @@ export function Player() {
       if (stride.current > (state.running ? 1.05 : 0.72)) {
         stride.current = 0
         const onBridge = body.x > BRIDGE.x0 - 0.35 && body.x < BRIDGE.x1 + 0.35 && body.z > BRIDGE.z0 - 0.1 && body.z < BRIDGE.z1 + 0.1
-        sound.footstep(body.x, body.z, onBridge, state.running)
+        sound.footstep(body.x, body.z, onBridge, state.running, game.area === 'outdoor' ? undefined : 'wood')
       }
     } else {
       state.moving = false
@@ -163,13 +169,23 @@ export function Player() {
     rp.facing = state.facing
     rp.moving = state.moving
 
-    const destination = exitAt(game.sceneId, body.x, body.z, ix)
-    if (destination) {
-      game.travel(destination)
+    if (game.area === 'outdoor') {
+      const destination = exitAt(game.sceneId, body.x, body.z, ix)
+      if (destination) {
+        game.travel(destination)
+        return
+      }
+      // Walking into the cottage door takes you inside.
+      if (game.sceneId === 'elmbrook' && enteringCottage(body.x, body.z, iz)) {
+        game.goToArea('cottage')
+        return
+      }
+    } else if (leavingCottage(body.x, body.z, iz)) {
+      game.goToArea('outdoor')
       return
     }
     const [fx, fz] = DIR_VEC[state.facing]
-    const focus = game.menuOpen ? null : findFocus(body.x, body.z, fx, fz)
+    const focus = uiOpen ? null : findFocus(body.x, body.z, fx, fz)
     runtime.focusId = focus?.id ?? null
     game.setPrompt(focus ? { kind: focus.kind, name: focus.name } : null)
     if (focus && consumePress('interact')) {
@@ -212,6 +228,8 @@ export function Npc({ def }: { def: NpcDef }) {
     const dt = runtime.dt
     if (dt === 0) return // frozen
     const game = useGame.getState()
+    // Village NPCs pause while the player is indoors (their area isn't being drawn).
+    if (game.area !== 'outdoor') return
     const p = runtime.player
     const dx = p.x - body.x
     const dz = p.z - body.z
@@ -269,7 +287,7 @@ export function InteractionMarker() {
   const mesh = useRef<THREE.Mesh>(null!)
   const { material, geometry, textures } = useMemo(() => {
     const atlas = getSpriteAtlas()
-    const make = (name: 'talk' | 'read') => {
+    const make = (name: 'talk' | 'read' | 'search') => {
       const t = atlas.texture.clone()
       const r = atlas.rects[name]
       t.offset.set(r.u, r.v)
@@ -277,7 +295,7 @@ export function InteractionMarker() {
       t.needsUpdate = true
       return t
     }
-    const textures = { talk: make('talk'), read: make('read') }
+    const textures = { talk: make('talk'), read: make('read'), search: make('search') }
     const material = new THREE.MeshBasicMaterial({ map: textures.talk, alphaTest: 0.5, depthTest: false })
     return { material, geometry: billboardGeometry(14 / 16, 12 / 16), textures }
   }, [])

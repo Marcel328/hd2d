@@ -70,14 +70,16 @@ function Stick() {
 export function TouchControls() {
   const enabled = useSettings((s) => s.touchControls)
   const dialogue = useGame((s) => s.dialogue)
+  const bagOpen = useGame((s) => s.inventoryOpen)
   const prompt = useGame((s) => s.prompt)
   const [running, setRunning] = useState(false)
+  const hidden = !!dialogue || bagOpen
   useEffect(() => {
-    if (!dialogue) return
+    if (!hidden) return
     virtualPad.run = false
     setRunning(false)
-  }, [dialogue])
-  if (!enabled || dialogue) return null // during dialogue, tapping the box advances it
+  }, [hidden])
+  if (!enabled || hidden) return null // during dialogue, tapping the box advances it
 
   const setRun = (v: boolean) => {
     virtualPad.run = v
@@ -104,7 +106,7 @@ export function TouchControls() {
           onPointerDown={() => virtualPress('interact')}
           aria-label="Interact"
         >
-          {prompt?.kind === 'read' ? 'Read' : 'Talk'}
+          {prompt?.kind === 'read' ? 'Read' : prompt?.kind === 'search' ? 'Search' : 'Talk'}
         </button>
       </div>
     </div>

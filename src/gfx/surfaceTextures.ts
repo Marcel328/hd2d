@@ -297,3 +297,129 @@ export function waterTexture(): THREE.CanvasTexture {
     }
   return toTexture(b, { repeat: true })
 }
+
+// ---------- interior surfaces ----------
+
+/** Floorboards running east–west with staggered butt joints; 32×32 texels over 2 units. */
+export function floorboards(): PixelBuffer {
+  const b = new PixelBuffer(32, 32)
+  const c0 = hex('#9a6a3f')
+  const boardH = 4
+  for (let y = 0; y < 32; y++) {
+    const board = Math.floor(y / boardH)
+    const ly = y % boardH
+    const joint = (board * 13) % 32
+    const tone = hash2(board, 0, 81)
+    for (let x = 0; x < 32; x++) {
+      const segment = x < joint ? 0 : 1
+      const g = valueNoise(x / 7, y * 0.6, board * 3 + segment) * 0.55 + hash2(x, y, 82) * 0.25
+      let c = mix(ramp(c0, -0.7), ramp(c0, 0.55), tone * 0.45 + g)
+      if (ly === boardH - 1) c = ramp(c0, -2.1) // gap between boards
+      else if (ly === 0) c = ramp(c, 0.5)
+      if (x === joint) c = ramp(c0, -1.8)
+      if (hash2(x, board, 83) > 0.985 && ly === 1) c = ramp(c0, -1.4) // nail
+      b.set(x, y, c)
+    }
+  }
+  return b
+}
+
+/** Patchwork quilt; 16×16 texels per 1 unit. */
+export function quilt(): PixelBuffer {
+  const b = new PixelBuffer(16, 16)
+  const patches = ['#a8443a', '#d9b05c', '#4f7a8c', '#7d9a4a'].map(hex)
+  for (let y = 0; y < 16; y++)
+    for (let x = 0; x < 16; x++) {
+      const p = patches[((x >> 3) + (y >> 3) * 3) % patches.length]
+      let c = (x + y) % 4 === 0 ? ramp(p, 0.6) : p
+      if (x % 8 === 0 || y % 8 === 0) c = hex('#efe2c4') // stitching
+      b.set(x, y, c)
+    }
+  return b
+}
+
+export function linen(): PixelBuffer {
+  const b = new PixelBuffer(16, 16)
+  for (let y = 0; y < 16; y++)
+    for (let x = 0; x < 16; x++) b.set(x, y, mix(hex('#e4dccb'), hex('#f5f0e4'), hash2(x, y >> 1, 84) * 0.8))
+  return b
+}
+
+/** Shelves of book spines; 32×32 texels over 2 units (four shelves). */
+export function books(): PixelBuffer {
+  const b = new PixelBuffer(32, 32)
+  const spines = ['#7a2f2a', '#2f4f6e', '#3f6a3a', '#8a6a2a', '#5a3a6a', '#a8743a', '#2e2a2a'].map(hex)
+  const shelf = hex('#3e2618')
+  for (let row = 0; row < 4; row++) {
+    const y0 = row * 8
+    let x = 0
+    let i = row * 5
+    while (x < 32) {
+      const wdt = 2 + Math.floor(hash2(i, row, 85) * 3)
+      const h = 5 + Math.floor(hash2(i, row, 86) * 3)
+      const c = spines[Math.floor(hash2(i, row, 87) * spines.length)]
+      for (let dx = 0; dx < wdt && x + dx < 32; dx++)
+        for (let dy = 0; dy < 7; dy++) {
+          const yy = y0 + dy
+          if (dy < 7 - h) b.set(x + dx, yy, hex('#1e130c')) // gap above the book
+          else {
+            let cc = dx === 0 ? ramp(c, 0.7) : dx === wdt - 1 ? ramp(c, -1) : c
+            if (dy === 7 - h + 1) cc = hex('#d9b05c') // gilt band
+            b.set(x + dx, yy, cc)
+          }
+        }
+      x += wdt
+      i++
+    }
+    for (let x2 = 0; x2 < 32; x2++) b.set(x2, y0 + 7, shelf)
+  }
+  return b
+}
+
+/** Woven rug with a border; drawn once over its whole rectangle (not tiled). */
+export function rug(w: number, h: number, field: string, border: string): PixelBuffer {
+  const b = new PixelBuffer(w, h)
+  const f = hex(field)
+  const br = hex(border)
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      const edge = Math.min(x, y, w - 1 - x, h - 1 - y)
+      let c: RGB
+      if (edge === 0) c = ramp(br, -1.2)
+      else if (edge < 3) c = (x + y) % 2 ? br : ramp(br, 0.6)
+      else {
+        // Diamond medallions on the field.
+        const cx = Math.abs(x - w / 2) / (w / 2)
+        const cy = Math.abs(y - h / 2) / (h / 2)
+        const d = cx + cy
+        c = d < 0.35 ? ramp(br, 0.5) : d < 0.45 ? ramp(f, -1) : (x * 3 + y * 5) % 11 === 0 ? ramp(f, 0.7) : f
+      }
+      b.set(x, y, mix(c, ramp(c, -0.5), hash2(x, y, 88) * 0.35))
+    }
+  return b
+}
+
+export interface InteriorSurfaceSet {
+  floor: THREE.Texture
+  quilt: THREE.Texture
+  linen: THREE.Texture
+  books: THREE.Texture
+  rug: THREE.Texture
+  doormat: THREE.Texture
+}
+
+let interiorCache: InteriorSurfaceSet | null = null
+
+export function getInteriorSurfaces(): InteriorSurfaceSet {
+  if (interiorCache) return interiorCache
+  const tile = (b: PixelBuffer) => toTexture(b, { repeat: true, mipmaps: true, anisotropy: 4 })
+  interiorCache = {
+    floor: tile(floorboards()),
+    quilt: tile(quilt()),
+    linen: tile(linen()),
+    books: tile(books()),
+    rug: toTexture(rug(60, 38, '#8c2f2a', '#d9a94f'), { mipmaps: true, anisotropy: 4 }),
+    doormat: toTexture(rug(16, 10, '#6a5a3a', '#3e3424'), { mipmaps: true, anisotropy: 4 }),
+  }
+  return interiorCache
+}

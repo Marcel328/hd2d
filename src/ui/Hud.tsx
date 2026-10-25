@@ -4,6 +4,7 @@ import { PRESETS, useSettings, useQuality, type QualityLevel, type Toggle } from
 import { useDev } from '../game/dev'
 import { DevPanel } from './DevPanel'
 import { TouchControls } from './TouchControls'
+import { BagButton, InventoryPanel, Toasts } from './Inventory'
 import { SCENES } from '../game/world/scenes'
 import { sound, VOICES } from '../game/audio'
 
@@ -61,7 +62,7 @@ export function InteractionPrompt() {
     <div className="prompt">
       <kbd>E</kbd>
       <span>
-        {prompt.kind === 'talk' ? 'Talk to' : 'Read'} {prompt.name}
+        {prompt.kind === 'talk' ? 'Talk to' : prompt.kind === 'search' ? 'Search' : 'Read'} {prompt.name}
       </span>
     </div>
   )
@@ -85,7 +86,7 @@ export function LoadingScreen() {
 }
 
 export function LocationBanner() {
-  const sceneId = useGame((s) => s.sceneId)
+  const banner = useGame((s) => s.banner)
   const ready = useGame((s) => s.ready)
   const [show, setShow] = useState(true)
   useEffect(() => {
@@ -97,8 +98,8 @@ export function LocationBanner() {
   return (
     <div className="banner" aria-hidden>
       <div className="banner-rule" />
-      <h1>{SCENES[sceneId].name}</h1>
-      <p>{SCENES[sceneId].subtitle}</p>
+      <h1>{banner.title}</h1>
+      <p>{banner.subtitle}</p>
       <div className="banner-rule" />
     </div>
   )
@@ -129,6 +130,9 @@ export function ControlsHint() {
         <kbd>Esc</kbd> Settings
       </span>
       <span>
+        <kbd>I</kbd> Bag
+      </span>
+      <span>
         <kbd>M</kbd> Sound
       </span>
       <span>
@@ -149,6 +153,7 @@ export function TopBar() {
         <span className={night ? 'icon moon' : 'icon sun'} aria-hidden />
         {night ? 'Night' : 'Day'}
       </button>
+      <BagButton />
       <MuteButton />
       <button className="hud-btn" onClick={() => setMenuOpen(!menuOpen)} aria-expanded={menuOpen} title="Settings (Esc)">
         <span className="icon gear" aria-hidden />
@@ -302,20 +307,29 @@ function SceneTransition() {
   )
 }
 
+/** Quick black dip while walking through a door (the swap itself takes well under a frame). */
+function AreaFade() {
+  const active = useGame((s) => s.areaTarget !== null)
+  return <div className={active ? 'area-fade active' : 'area-fade'} aria-hidden />
+}
+
 export function Hud() {
   const touch = useSettings((s) => s.touchControls)
-  const sceneId = useGame((s) => s.sceneId)
+  const bannerSeq = useGame((s) => s.banner.seq)
   return (
     <div className={touch ? 'hud touch-on' : 'hud'}>
       <LoadingScreen />
       <TopBar />
       <FpsCounter />
-      <LocationBanner key={sceneId} />
+      <LocationBanner key={bannerSeq} />
+      <AreaFade />
       <SceneTransition />
       <InteractionPrompt />
       <DialogueBox />
+      <Toasts />
       <ControlsHint />
       <TouchControls />
+      <InventoryPanel />
       <SettingsPanel />
       <DevPanel />
     </div>

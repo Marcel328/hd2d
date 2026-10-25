@@ -15,6 +15,7 @@ export type Action =
   | 'devStep'
   | 'devFreeCam'
   | 'mute'
+  | 'inventory'
 
 const BINDINGS: Record<Action, string[]> = {
   up: ['KeyW', 'ArrowUp'],
@@ -30,6 +31,7 @@ const BINDINGS: Record<Action, string[]> = {
   devStep: ['Period'],
   devFreeCam: ['KeyF'],
   mute: ['KeyM'],
+  inventory: ['KeyI', 'KeyB'],
 }
 
 const held = new Set<string>()
